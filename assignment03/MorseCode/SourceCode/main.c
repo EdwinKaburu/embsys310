@@ -31,6 +31,20 @@ const unsigned int ed_morse_size = ( sizeof(lc_ptr)/sizeof(char) );
 
 volatile int counter = 0;
 
+// Toggle between On or Off State using  XOR (bitwise) 
+void ledToggle(unsigned int timer)
+{
+    counter = 0;
+    
+    //Toggle Led : On or Off State
+    GPIOA_ODR ^= ORD5;
+    
+    // Unit of TIme
+    while (counter < timer)
+    {
+        counter++;
+    }
+}
 
 
 // Character Unit Time function: c_Unit(const char element)
@@ -39,45 +53,20 @@ void c_Unit(const char* elem)
 {
     switch (*elem) {
     case '.':
-        counter = 0;
         
-        //Turn On Led 1 : [1] One Unit of Time   
-        GPIOA_ODR |= ORD5;
+        //Turn On Led 1 : [1] One Unit of Time  
         
-        // [1] One unit of TIme
-        while (counter < DOT_TIME)
-        {
-            counter++;
-        }
+        ledToggle(DOT_TIME);
         
-        break;
-    case '-':
-        counter = 0;
-        
-        //Turn On Led 1 : 3 Units of Time
-        GPIOA_ODR |= ORD5;
-        
-        while (counter < DASH_TIME)
-        {
-            counter++;
-        }
         break;
     default:
-        counter = 0;
+        // Dashes ( "-" ) and Spaces,between letters, ( " " ) are 3 Units respectively. 
         
-        //Turn Off Led 1 (using Xor for reset)
-        // Space between letters, as such there is a 3 units Pause
+        ledToggle(DASH_TIME);
         
-        GPIOA_ODR ^= ORD5;
-        
-        while (counter < DASH_TIME)
-        {
-            counter++;
-        }
         break;
     }
 }
-
 
 int main()
 {
@@ -101,19 +90,10 @@ int main()
             //Check where this char represent a letter
             //(There is a space/pause for one [1] unit; to the parts representing a letter)
             if(lc_ptr[a+1] != ' ' && lc_ptr[a] != ' ' )
-            {
-                //reset counter 
-                counter = 0;
-                
-                //Turn off Led 1 : On Letter Condition
-                GPIOA_ODR ^= ORD5;
-                
-                // Represent 0ne Unit (DOT TIME)
-                while (counter < DOT_TIME)
-                {
-                    counter++;
-                }
-                
+            {   
+                //Turn off Led 1 : On Letter Condition : Represent 0ne Unit (DOT TIME)
+                 ledToggle(DOT_TIME);
+                 
             }
             
         }
