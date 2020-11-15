@@ -103,5 +103,5 @@ This is a very wordy, there is a video on this, for reference at (vimeo - https:
 
 See files (source code)for implementation, Test and Comments
 
-![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/Stack_DST/Img/capture.png)
+![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/Stack_DST/Img/capture.PNG)
 
