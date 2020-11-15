@@ -23,88 +23,84 @@ void stack_init(void) {
 }
 
 int stack_push(int data) {
-
-    // If Full Return -1
+    
+    // Exit or return -1, if stack is full
     if (isfull())
     {
         return  -1;
     }
-
-    //Insert where putPtr is currently poiting to
+    
+    // Insert data where putPtr is currently is
     *putPtr = data;
-
-    // Next Available Index
-   // putPtr++;
-
-   // No Increment past Storage Size Limit
-    if(counter != (STACK_SIZE -1) )
+    
+    // This is the Last Item inserted (GetPtr always points to last item added, From putPtr)
+    getPtr = putPtr;
+    
+    // Increment Number of Items in Stack
+    counter++;
+    
+    // No Incrementation If Stack Is Full
+    if (isfull() != 1)
     {
         putPtr++;
     }
-
-    //Number of Elements
-    counter++;
-
-    return 0;
+    
+    return  0;
 }
 
 int stack_pop(int *data) {
-
-    if(isempty())
+    
+    // Exit or return -1, is stack is Empty
+    if (isempty())
     {
-        return  -1;
+        return -1;
     }
-
-    // Get Data and Return it
+    
+    // Get Data And Return It
+    // getPtr will always point to the Last (LIFO)
     *data = *getPtr;
-
-    // Reset the Current List Values
-    *getPtr = 0;
-
-   //Reset getPtr to the First Index
-    if ((*(getPtr + 1)) == 0)
-    {
-        getPtr = Stack_Data;
-    }
-    else
-    {
-        getPtr = (getPtr + 1);
-    }
-
-    // Rest Put_PTR to first index, when full (circular stack)
-    if (isfull())
-    {
-        putPtr = Stack_Data;
-    }
-
+    
+    //Reset To Zero
+    *getPtr =0;
+    
+    // Decrement
+    getPtr--;
+    
+    // Decrement Counter
     counter--;
-
+    
+    // putPtr points to last Value popped , so that new values can be added.
+    if(counter != (STACK_SIZE -1) )
+    {
+        putPtr--;
+    }
+    
     return 0;
 }
 
 int isempty(void) {
-   
+    
     // Return 1 when Empty
-
+    
     if(counter == 0)
     {
         // True: Stack is Empty
         return  1;
     }
-
+    
     //False : Stack is not Empty
     return 0;
 }
 
 int isfull(void)
 {
-
+    
     if(counter == STACK_SIZE)
     {
         // True if stack is Full
         return 1;
     }
-
+    
     // False if stack is not Full
     return 0;
 }
