@@ -49,6 +49,7 @@ c.	What extra code did the compiler generate inside the called function “funct
 
  - Since we have a Thumb instruction on the machine, the LR (Link Register), will hold the address (0x08000077), to return to when the function call, funct1() ends/complete.
  
+ ![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/Img8.PNG)
  
  [ Click Here To See Image](https://github.com/EdwinKaburu/embsys310/tree/main/assignment04/BlinkingAndFunct/Img/Img8.PNG)
  
@@ -86,7 +87,7 @@ Before the initializations and addition calculation, we stored the values in the
 
 [ Click Here To See Image](https://github.com/EdwinKaburu/embsys310/tree/main/assignment04/BlinkingAndFunct/Img/Img17.PNG)
 
-This is a very wordy, there is a video on this, for reference at (vimeo - https://vimeo.com/479594367)
+This is a very wordy, there is a video on this, for reference at (vimeo - https://vimeo.com/479594367) or the gif below
 
 - ![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/functOverview.gif)
 
