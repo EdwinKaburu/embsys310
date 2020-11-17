@@ -24,7 +24,7 @@ b.	What were the instructions produced when writing to the RCC_AHB2ENR without u
 a.	How does the calling function “func2” pass the values to the called function “func1”? 
 
  - Well funct1(), preforms and return the addition of the 5 arguments, the main purpose of func2() is to call func1() and initializes the required fields into the parameter.
-As such the compiler generate the BL instruction, ASM to, branch/jump to funct2() at the address 0x8000064, which will be loaded into the Program Counter as the next instruction to perform.
+As such the compiler generate the BL instruction, ASM (Assembly Instruction) to, branch/jump to funct2() at the address 0x8000064, which will be loaded into the Program Counter as the next instruction to perform.
 
 ![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/Img4.PNG)
 
