@@ -1,5 +1,5 @@
-## Problem 1
-### Follow the same steps as we did in the class to blink LED1 (PA5) at a visible rate using the bit band region to enable the clock to Port A, then answer the following: 
+## Assignment 04
+### 1. Follow the same steps as we did in the class to blink LED1 (PA5) at a visible rate using the bit band region to enable the clock to Port A, then answer the following: 
  
  a. What instructions does the compiler produce in assembly for “writing” to the RCC_AHB2ENR bit when using bit-band address?
  - The instructions that were produced by the compiler using the bit
@@ -19,7 +19,7 @@ b.	What were the instructions produced when writing to the RCC_AHB2ENR without u
    
    ![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/Img1.PNG)
 
-### Create a function “func1” with 5  arguments and call “func1” from within another function “func2”. Trace thru the assembler and note: 
+### 2. Create a function “func1” with 5  arguments and call “func1” from within another function “func2”. Trace thru the assembler and note: 
 
 a.	How does the calling function “func2” pass the values to the called function “func1”? 
 
@@ -41,6 +41,7 @@ With the calling of the arguments to be initialized into func1, are multiple MOV
 As such the instruction generate are as followed for the 5 values: 
 First #5 is moved into R0, followed by storing RO value into the add that SP (stack pointer) is pointing at location/address(0x20001FF8) , so its data will be overwritten to (0x00000005).
 
+![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/Img7.PNG)
 
 [ Click Here To See Image](https://github.com/EdwinKaburu/embsys310/tree/main/assignment04/BlinkingAndFunct/Img/Img6.PNG)
 
@@ -90,7 +91,7 @@ This is a very wordy, there is a video on this, for reference at (vimeo - https:
 - ![alt text](https://github.com/EdwinKaburu/embsys310/blob/main/assignment04/BlinkingAndFunct/Img/functOverview.gif)
 
 
-## Problem 3
+## Problem 3 : Stack ADT
 - Stack LIFO, the ADT is as follows
 
 |adt | functionality |
