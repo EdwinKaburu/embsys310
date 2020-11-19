@@ -35,7 +35,7 @@ Passing the Values to the swap_ptr() function
 
 B. What are the values in R0 & R1 when swap_pointer() is called?
 -
-Before
+Before Swap
 
  - The value currently stored in R0, is the address in SP of the xPtr
    pointer (0x20001FEC, its data value is the SP address/memory location
@@ -45,9 +45,9 @@ Before
    
    ![combBeforeAfter](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/combBeforeAfer.png)
 
-After
+After Swap
 
- - After, swapping the SP address/memory of where the xPtr and yPtr are pointing to; **[ xPtr ] will be point to the address/memory [yPtr ]is pointing to prior to performing the swap**; so (xPtr -> val1 and yPtr -> val). We get the result below. See Source Code (main.c)
+ - After, swapping the SP address/memory of where the xPtr and yPtr are pointing to; **[ xPtr ] will be point to the address/memory [yPtr ]is pointing to prior to performing the swap**; so (xPtr -> val1 and yPtr -> val). We get the result below, **After Performing Swap** . See Source Code (main.c)
    
    ![combBeforeAfter](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/finalPointer.PNG)
 
