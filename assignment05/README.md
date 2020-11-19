@@ -17,7 +17,7 @@ A. Explain what the “main” function does in order to setup the input argumen
  |Location of Pointer(xPtr) in SP| Data: SP Address/Memory Location of (Val)  |
 |--|--|
 | 0x2000 1FEC  |0x2000 1FF4  |
----
+
 | Location of Val in SP | Data: Actual int Value|
 |--|--|
 | 0x2000 1FF4 | 0x0001 86A0  | 
@@ -30,7 +30,8 @@ Passing the Values to the swap_ptr() function
  - As such the MOV will store the **SP memory/address** location of yPtr (0x20001FE8) into R1; R0 will contain the SP memory/address location of xPtr (0x20001FEC), before branching out.
  
  ![BeforeImg](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/beforeBL.PNG)
- 
+
+---
 
 B. What are the values in R0 & R1 when swap_pointer() is called?
 -
