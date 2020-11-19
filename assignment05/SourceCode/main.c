@@ -1,8 +1,7 @@
+#include "swap.h"
 
 // Arguments/Parameters : 
 // Note to self(11/16/20) A Pointer pointing to a pointer(we are swapping pointers)
-
-void swap_ptr(int **x_ptr, int **y_ptr);
 
 void swap_ptr(int **x_ptr, int **y_ptr)
 {
@@ -33,9 +32,9 @@ int main()
     // Perform Swap of Pointers
     // End Result should be vice versa 
     swap_ptr(&xPtr, &yPtr);
-	
-	// int *temp = xPtr;
     
+	// int *temp = xPtr;
+
     
     return 0;
 }
