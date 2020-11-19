@@ -46,7 +46,7 @@ Before
 
 After
 
- - After, swapping the SP address/memory of where the xPtr and yPtr are pointing to; [ xPtr ] will be point to the address/memory [yPtr ]is pointing to prior to performing the swap, so (xPtr -> val1 and yPtr -> val). We get the result below. See Source Code (main.c)
+ - After, swapping the SP address/memory of where the xPtr and yPtr are pointing to; **[ xPtr ] will be point to the address/memory [yPtr ]is pointing to prior to performing the swap**; so (xPtr -> val1 and yPtr -> val). We get the result below. See Source Code (main.c)
    
    ![combBeforeAfter](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/finalPointer.PNG)
 
