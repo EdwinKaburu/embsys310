@@ -50,4 +50,29 @@ After Swap
  - After, swapping the SP address/memory of where the xPtr and yPtr are pointing to; **[ xPtr ] will be point to the address/memory [yPtr ]is pointing to prior to performing the swap**; so (xPtr -> val1 and yPtr -> val). We get the result below, **After Performing Swap** . See Source Code (main.c)
    
    ![combBeforeAfter](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/finalPointer.PNG)
+   
+
+## 2. Create a new file divAsm.s and add the file to the same HelloWorld project above 
+For question you can see in more details and comments at  [C_Assembler/divAsm.s](https://github.com/EdwinKaburu/embsys310/tree/main/assignment05/C_Assembler/divAsm.s)
+Overall, it can be summed up into 2 instructions, where we are first moving/loading  [MOV] into R1 (register) #2, that we need to divided by. As such to get out, a (integer) division; [SDIV], we divide R0 (contains our input) by R1 and write/store  it back to register R0.  ( SDIV R0, R0, R1 ), then we return to address LR (will be loaded into PC), so BX LR.
+
+## 3. Implement a swap function in assembly and call it “swapCharsAsm”:   	 4. Bonus: Implement the swap_pointer() function from #1 above in assembly and call it swapPointersAsm()
+
+The assembly code for question 3 and 4 are very similar, but differ in what is being  in the loaded and stored. The comment in code make the distinction very clear.
+Both when it comes to setting the input/parameters, The R0 and R1 registers contains/points to  the SP Memory/Address  of the inputs/parameters, thus when storing and loading [LDR or LDRB]  the value stored in the SP, it is becomes much more easier.
+
+- For instance, (Swapping the 2 pointers), in the registers it will contain the address of the 2 pointers in SP
+
+|Name|Value  |  |
+|--|--|--|
+| R0 |0x20001FF0  | xPtr |
+| R1 | 0x20001FEC | yPtr |
+
+- In SP (Stack), it will have a Pointer (xPtr, yPtr) Address in SP; and the SP address it is pointing to, see [Question 1 Above](https://github.com/EdwinKaburu/embsys310/tree/main/assignment05#a-explain-what-the-main-function-does-in-order-to-setup-the-input-arguments-prior-to-calling-the-swap_pointer-function)
+
+|Location| Data  |
+|--|--|
+| 0x20001FEC | 0x20001FF4 |
+
+ **- For Question 2 - 4 , you can find them in C_Assembler folder** 
 
