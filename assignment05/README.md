@@ -68,7 +68,7 @@ Both when it comes to setting the input/parameters, The R0 and R1 registers cont
 | R0 |0x20001FF0  | xPtr |
 | R1 | 0x20001FEC | yPtr |
 
-- In SP (Stack), it will have a Pointer (xPtr, yPtr) Address in SP; and the SP address it is pointing to, see [Question 1 Above](https://github.com/EdwinKaburu/embsys310/tree/main/assignment05#a-explain-what-the-main-function-does-in-order-to-setup-the-input-arguments-prior-to-calling-the-swap_pointer-function)
+- In SP (Stack), it will have a Pointer (xPtr, yPtr) Address in SP; and the SP address (data) it is pointing to, see [Question 1 Above](https://github.com/EdwinKaburu/embsys310/tree/main/assignment05#a-explain-what-the-main-function-does-in-order-to-setup-the-input-arguments-prior-to-calling-the-swap_pointer-function)
 
 |Location| Data  |
 |--|--|
