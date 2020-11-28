@@ -38,41 +38,18 @@ int main()
     // Set bit[1] to 1
     // 1. Enable clock to Peripheral
     
-   // RCC_AHB2ENR |= 0X1;
-    
+    // Enable RCC 
     RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
     
-    
-    //   RCC_AHB2ENR |= 0X2;
-    
-    
-    // GPIOA_MODER &= 0xFFFFF7FF;
-    
-    //GPIOA->
+    // GPIO MODER 
     GPIOA->MODER &= ~GPIO_MODER_MODE5_1;
     GPIOA->MODER |= GPIO_MODER_MODE5_0;
     
-    //GPIOB_MODER &= 0xDFFFFFFF;
     
     while(1)
     {
         delay();
         
-        // GPIOA->ODR ^= GPIO_ODR_OD5;
-        
-        //   GPIOB_ODR |= ORD14;
-        
-        // counter=0;
-        //  while (counter < 100000)
-        //  {
-        //     counter++;
-        // }
-        
-        //Shift left 5 times
-        
-        // GPIOA->ODR ^= GPIO_ODR_OD5;
-        
-        // GPIOB_ODR &= ~ORD14;
         
     }
     

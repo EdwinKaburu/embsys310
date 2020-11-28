@@ -9,17 +9,13 @@
 
 #define GPIOA_MODER (*((unsigned int*) (GPIOA_BASE +  0x0) ))
 
-//#define GPIOA_ODR (*((unsigned int*) (GPIOA_BASE +  0x14) ))
-
-//#define ORD5 (1 << 5) 
-
-
 void delay(uint32_t duration);
 
 void control_user_led1(uint8_t state, uint32_t duration);
 
 int main()
 {
+    
     uint8_t on_state = 1u;
     
     uint8_t off_state = 0u;

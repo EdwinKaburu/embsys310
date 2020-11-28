@@ -55,31 +55,34 @@ GPIOA_ODR   EQU 0x14
 GPIOA_BIT_5 EQU 0x20
 
 control_user_led1
-    PUSH {R3-R5,LR}
-    MOVS R4, R0
-    MOVS R5, R1
-    CMP R0, #1
-    BNE offcheck        // IF R0 is equal to 0, turn Off Led (Not Equal to 1 )
-    BEQ storebit        // If R0 is eqaul to 1, turn On Led (Equal to 1,  go to Storebit)
-storebit
-    LDR R0, =GPIOA_BASE
-    LDR R1, =GPIOA_ODR
-    ADD R0, R0, R1
-    LDR R1, [R0]
-    EORS.W R1, R1,#32
-    STR R1, [R0]
-    B delayfun
+    PUSH {R3-R5,LR}     // PUSH R-R5 and LR to Stack
+    MOVS R4, R0         // MOVE the R0 into R4
+    MOVS R5, R1         // MOVE the R1 into R5
+    CMP R0, #1          // COMP R0 with #1 
+    BNE offcheck        // If R0 is equal to 0, turn Off Led (Not Equal to 1 go to offcheck)
+    BEQ turnon          // If R0 is eqaul to 1, turn On Led (Equal to 1,  go to turnon)
+turnon
+    LDR R0, =GPIOA_BASE // Load GPIOA_BASE into R0
+    LDR R1, =GPIOA_ODR  // Load GPIOA_ODR Offset into R0
+    ADD R0, R0, R1      // Add GPIOA_BASE + GPIOA_ODR (offset) to generate the GPIOA_ODR adddress
+    LDR R1, [R0]        // Load into R1 current value/data, pointed/from the GPIOA_ODR adddress (0x4800 0014)
+    B storebit          // R1 value is (0x00000000 ), In order to Turn on
 offcheck
-   LDR R0, =GPIOA_BASE
-   LDR R1, =GPIOA_ODR
-   ADD R0, R0, R1
-   LDR R1, [R0]
-   CMP R1, #0
-   BEQ delayfun
-   BNE storebit         // reset led by storing/reset value in 4800 0014
+   LDR R0, =GPIOA_BASE  // Load GPIOA_BASE into R0
+   LDR R1, =GPIOA_ODR   // Load GPIOA_ODR Offset into R0
+   ADD R0, R0, R1       // Add GPIOA_BASE + GPIOA_ODR (offset) to generate the GPIOA_ODR adddress
+   LDR R1, [R0]         // Load into R1 current value/data, pointed/from the GPIOA_ODR adddress (0x4800 0014)
+   CMP R1, #0           // Comparison
+   BEQ delayfun         // R1 value is (0x00000000 ), no need to reset, go to delay
+   BNE storebit         // R1 value is (0x00000020 ), In order to reset PA5, Turn off
+storebit
+   LDR R2, =GPIOA_BIT_5
+   EORS.W R1, R1, R2  // XOR R1 with GPIOA_BIT_5; In order to reset or turn depending on current state
+   STR R1, [R0]       // Store R1 back into R0(0x4800 0014)'s data/value
+   B delayfun         // Go to delayfun
 delayfun
     MOVS R0, R5
-    BL delay
+    BL delay          // Go to Delay Function (parameter set with the #items to count)
     POP {R0,R4,R5,PC}
     //BX LR
     END
