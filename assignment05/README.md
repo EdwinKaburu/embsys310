@@ -56,7 +56,7 @@ Both when it comes to setting the input/parameters, The R0 and R1 registers cont
 |--|--|
 | 0x20001FEC | 0x20001FF4 |
 
- **- For Question 2 - 4 , you can find them in [C_Assembler folder](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/C_Assembler/main.c)** 
+ **- For Question 2 - 4 , you can find them in [C_Assembler folder](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/C_Assembler)** 
  
   ![AsmPicture](https://github.com/EdwinKaburu/embsys310/blob/main/assignment05/Img/AsmPicture.PNG)
   
