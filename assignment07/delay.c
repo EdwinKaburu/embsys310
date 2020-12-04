@@ -1,21 +1,26 @@
 #include "delay.h"
+#include "stm32l475xx.h"
+
+#define SYS_CLOCK_HZ_MS 4000u; 
 
 
-#define SYS_CLOCK_HZ 4000000u
-
-void delay(uint32_t delayInMilliseconds)
+void delay(uint32_t delay_ms)
 {
-    uint32_t time_delay = (SYS_CLOCK_HZ * delayInMilliseconds) / 1000u;
+   
+    int elapse_ms =  delay_ms * SYS_CLOCK_HZ_MS; 
     
-    SysTick->LOAD = time_delay - 1;        // 0xE000E014 - Counts down to 0.
-    SysTick->VAL = 0x0;                     // 0xE000E018 - Clears initial value
-    SysTick->CTRL = 0x7;                    // 0xE000E010 - Enable interrupts
+    // 0xE000E014 - Counts down to 0.
+    SysTick->LOAD = elapse_ms - 1;
+    
+    // 0xE000E018 - Clears initial value
+    SysTick->VAL = 0x0;      
+    
+    // 0xE000E010 - Enable interrupts
+    SysTick->CTRL = 0x7;                    
+    
+    while(SysTick->VAL)
+    {
+        
+    }
+    
 }
-
-//void delay(unsigned int iteration)
-//{
-//    while (iteration > 0)
-//    {
-//        iteration--;    
-//    }
-//}
