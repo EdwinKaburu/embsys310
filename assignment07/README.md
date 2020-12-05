@@ -32,4 +32,4 @@
    code = 84 bytes, ro data = 4 bytes, rw data = 4 bytes), not much rw
   data to RAM
 
-see cmsis_led.map file
+see Map/cmsis_led.map file
