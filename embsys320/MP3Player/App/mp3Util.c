@@ -64,7 +64,7 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
   
   INT8U mp3Buf[MP3_DECODER_BUF_SIZE];
   INT32U iBufPos = 0;
-  nextSong = OS_FALSE;
+ // nextSong = OS_FALSE;
   while (dataFile.available())
   {
     if(stopSong)

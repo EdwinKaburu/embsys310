@@ -20,7 +20,6 @@ The tasks that are executed by the test application.
 #include "bsp.h"
 #include "print.h"
 #include "mp3Util.h"
-#include "button_ui.h"
 
 // SD Card Library
 #include "SD.h"
@@ -40,6 +39,8 @@ Adafruit_GFX_Button pauseBottom;
 
 Adafruit_GFX_Button nextBottom;
 
+Adafruit_GFX_Button previousBottom;
+
 
 #define PENRADIUS 3
 
@@ -51,6 +52,8 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 
 #define BUFSIZE 256
 
+#define capacity 3;
+
 /************************************************************************************
 
 Allocate the stacks for each task.
@@ -58,11 +61,17 @@ The maximum number of tasks the application can have is defined by OS_MAX_TASKS 
 
 ************************************************************************************/
 
-static OS_STK   LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static OS_STK   LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE];
 
+static OS_STK   ControlTaskStk[APP_CFG_TASK_START_STK_SIZE];
+
 // ---------------- Task prototypes  -------------------------------------------
-void LcdTouchDemoTask(void* pdata);
+void LcdTouchTask(void* pdata); // Change (LcdTouchDemoTask) to Touch Task, Assert of buttons
+
+void ControlTask(void* pdata); // Actions Taken By Buttons
+
+// Include ---- Display Task ---- 
 
 void Mp3SDTask(void* pdata);
 
@@ -78,11 +87,28 @@ BOOLEAN nextSong = OS_FALSE;
 
 BOOLEAN stopSong = OS_FALSE;
 
+BOOLEAN prevSong = OS_FALSE;
+
 // Event flags for synchronizing mailbox messages
-OS_FLAG_GRP *btnFlags = 0;
+//OS_FLAG_GRP *btnFlags = 0;
 
 // Mutext
 OS_EVENT *pauseMutex;
+
+// MailBox
+OS_EVENT * buttonMBox;
+
+char *previousSong[] = { "music1", "music2", "music3" };
+
+
+typedef enum
+{
+  NONE_COMMAND,
+  PAUSE_COMMAND,
+  PLAY_COMMAND,
+  NEXT_COMMAND,
+  PREVIOUS_COMMAND,
+}ButtonControlsEnum;
 
 
 
@@ -94,7 +120,7 @@ the system tick timer and creates all the other tasks. Then it deletes itself.
 ************************************************************************************/
 void StartupTask(void* pdata)
 {
-  INT8U err;
+  // INT8U err;
   
   char buf[BUFSIZE];
   
@@ -105,14 +131,16 @@ void StartupTask(void* pdata)
   static HANDLE hSPI = 0;
   
   PrintWithBuf(buf, BUFSIZE, "StartupTask: Begin\n");
- // PrintWithBuf(buf, BUFSIZE, "StartupTask: Starting timer tick\n");
+  // PrintWithBuf(buf, BUFSIZE, "StartupTask: Starting timer tick\n");
   
   // Start the system tick
   SetSysTick(OS_TICKS_PER_SEC);
   
   // ----------- Create Flags and Mutex -------------------------------
   
-  btnFlags = OSFlagCreate(0x0,&err);
+  // btnFlags = OSFlagCreate(0x0,&err);
+  
+  buttonMBox = OSMboxCreate(NULL);
   
   
   // Initialize SD card
@@ -142,17 +170,15 @@ void StartupTask(void* pdata)
   // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
   uint16_t task_prio =APP_TASK_TEST2_PRIO;
   
- // OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
+  // OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   OSTaskCreate(Mp3SDTask, (void*)0, &Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
-  OSTaskCreate(LcdTouchDemoTask, (void*)0, &LcdTouchDemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
+  OSTaskCreate(LcdTouchTask, (void*)0, &LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
- 
+  // Control Task Creation
+  OSTaskCreate(ControlTask, (void*)0, &ControlTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
- // OSTaskCreate(PauseButtonTask, (void*)0, &PauseTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
- // OSTaskCreate(PlayButtonTask, (void*)0, &PlayTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
-  
-  pauseMutex = OSMutexCreate(task_prio++, &err);
+  //pauseMutex = OSMutexCreate(task_prio++, &err);
   
   // Delete ourselves, letting the work be done in the new tasks.
   //PrintWithBuf(buf, BUFSIZE, "StartupTask: deleting self\n");
@@ -181,68 +207,6 @@ static void DrawLcdContents()
 
 
 /*******************************************************************************
-Button Handlers
-*******************************************************************************/
-
-void PlayBtn_Handler(void)
-{
-  
-  INT8U err;
-  
-  OS_CPU_SR  cpu_sr;
-  
-  OS_ENTER_CRITICAL();
-  
-  // Non-Blocking Wait
-  OSFlagAccept(btnFlags ,0x2,OS_FLAG_WAIT_SET_ANY,&err );
-  
-  pauseBottom.press(0);   stopSong = OS_FALSE;
-  
-  // Active Play Button
-  OSFlagPost(btnFlags ,0x1,OS_FLAG_CLR ,&err);
-  
-  OS_EXIT_CRITICAL();
-  
-  OSIntExit();
-  
-}
-
-void PauseBtn_Handler(void)
-{
-  INT8U err;
-  
-  OS_CPU_SR  cpu_sr;
-  
-  OS_ENTER_CRITICAL();
-  
-  // Redirected from Interrupt
-  // PauseButton must Active at the end.
-  // 1 - Means Active (Set)
-  // 0 - Means Deactive (Clear)
-    
-  
-  // Pause
-  // Bit 1 or the Bit second ( 2 ) - Play Button Must be deactivated before continuing on.
-  // Will be cleared on Pause-Button Click.
-  OSFlagAccept(btnFlags ,0x1,OS_FLAG_WAIT_SET_ANY,&err );
-  
-  // If that is the case we can release the playBottom before
-  // Activating the Pause Button
-  
-  playBottom.press(0);stopSong = OS_TRUE;
-  
-  // Active Pause Button, by setting the Bit 0
-  OSFlagPost(btnFlags ,0x2,OS_FLAG_CLR,&err);
-  
-  OS_EXIT_CRITICAL();
-  
-  OSIntExit();
-  
-  
-}
-
-
-/*******************************************************************************
 RUN SD TASK CODE
 ********************************************************************************/
 
@@ -254,7 +218,7 @@ void Mp3SDTask(void* pdata)
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
   
- // PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
+  // PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
   // Open handle to the MP3 decoder driver
   HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
   if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
@@ -273,16 +237,63 @@ void Mp3SDTask(void* pdata)
   // Send initialization data to the MP3 decoder and run a test
   PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
   Mp3Init(hMp3);
-  // int count = 0;
+  int count = 0;
   
   //DrawBackGround();
   
   File dir = SD.open("/");
+  
+  
+    
   while (1)
   {
+    uint16_t counter = 0u;
+    
     while (1)
     {
+      
       File entry = dir.openNextFile();
+      
+      if(prevSong)
+      {
+         // Check if Array is Empty.
+         // Array Must Contain an Entry to in order To Go Previous.
+         // Counter will be decrement until 0; So entry will be counter.
+        
+         //if()
+        
+        PrintWithBuf(buf, BUFSIZE, "Previous =%d\n", counter);
+        
+        // Reset Previous
+        prevSong = OS_FALSE;
+        
+      }
+      
+      
+      
+      if(nextSong)
+      {
+        // ---------- Store Current File Name to Array ----------
+        
+        uint16_t file_locat = counter % capacity ;
+        
+        // Insert Into Array before Getting Next Skipped Song
+        
+        previousSong[file_locat] =  entry.name();     
+        
+        // Open Next File 
+        entry = dir.openNextFile();
+        
+        // Reset Next_Song to False
+        nextSong = OS_FALSE;
+        
+        // Increment Counter
+        
+        counter++;
+        
+      }
+    
+      
       if (!entry)
       {
         break;
@@ -292,34 +303,116 @@ void Mp3SDTask(void* pdata)
         entry.close();
         continue;
       } 
-      
+            
       //DrawLcdContents(entry.name(),40, 100);
       
-      // PrintWithBuf(buf, BUFSIZE, "Begin streaming sd file  count=%d\n", ++count);                
+      PrintWithBuf(buf, BUFSIZE, "Begin streaming sd file  count=%d\n", ++count);                
       Mp3StreamSDFile(hMp3, entry.name()); 
-      //  PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-     
+      PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
+      
       entry.close();
     }
     dir.seek(0); // reset directory file to read again;
   }
 }
 
-/************************************************************************************
+/*******************************************************************************
 
-Runs LCD/Touch demo code
+Runs Control Task code
 
-************************************************************************************/
-void LcdTouchDemoTask(void* pdata)
+*******************************************************************************/
+
+void ControlTask(void* pdata)
+{
+  INT8U err;
+  char buf[BUFSIZE];
+  ButtonControlsEnum *BtnControl_type;
+  
+  
+  PrintWithBuf(buf, BUFSIZE,"Control Task building\n");
+  
+  //OS_CPU_SR  cpu_sr;
+  
+  //OS_ENTER_CRITICAL();
+  
+  
+  while(1)
+  {
+    
+    BtnControl_type = (ButtonControlsEnum*)OSMboxPend(buttonMBox,0,&err);
+    
+    ButtonControlsEnum* value = BtnControl_type;
+    
+    PrintWithBuf(buf, BUFSIZE,"Value: %d \t %d \n", value, (*value));
+    
+    switch((int)BtnControl_type)
+    {
+    case NONE_COMMAND:
+      PrintString("None Command");
+      break;
+    case PAUSE_COMMAND:
+      
+      playBottom.press(0); stopSong = OS_TRUE;
+      break;
+    case PLAY_COMMAND:
+      
+      pauseBottom.press(0);  stopSong = OS_FALSE;
+      break;
+    case NEXT_COMMAND:
+      //previousBottom.press(0); 
+      nextBottom.press(1); prevSong = OS_FALSE;  nextSong = OS_TRUE;
+      break;
+    case PREVIOUS_COMMAND:
+     // nextBottom.press(0); 
+      //previousBottom.press(0);
+      prevSong = OS_TRUE; nextSong = OS_FALSE;
+      break;      
+    default:
+      PrintString("Error Command");
+      break;
+    }
+  }
+  
+  
+  
+  //OS_EXIT_CRITICAL();
+  
+  
+  
+  //while (1) OSTimeDly(1000);
+  
+}
+
+/*
+static void PlayPauseContext()
+{
+OS_CPU_SR  cpu_sr;
+
+OS_ENTER_CRITICAL();
+
+pauseBottom.press(0);  stopSong = OS_FALSE;
+
+OS_EXIT_CRITICAL();
+}*/
+
+/*******************************************************************************
+
+Runs LCD/Touch  code
+
+*******************************************************************************/
+void LcdTouchTask(void* pdata)
 {
   PjdfErrCode pjdfErr;
-  INT8U err;
+  // INT8U err;
   INT32U length;
   
-  char buf[BUFSIZE];
-  //PrintWithBuf(buf, BUFSIZE, "LcdTouchDemoTask: starting\n");
   
- // PrintWithBuf(buf, BUFSIZE, "Opening LCD driver: %s\n", PJDF_DEVICE_ID_LCD_ILI9341);
+  //ButtonControlsEnum BtnControl_type;
+  
+  char buf[BUFSIZE];
+  PrintWithBuf(buf, BUFSIZE, "LcdTouchDemoTask: starting\n");
+  
+  PrintWithBuf(buf, BUFSIZE, "Opening LCD driver: %s\n", PJDF_DEVICE_ID_LCD_ILI9341);
   // Open handle to the LCD driver
   HANDLE hLcd = Open(PJDF_DEVICE_ID_LCD_ILI9341, 0);
   if (!PJDF_IS_VALID_HANDLE(hLcd)) while(1);
@@ -373,16 +466,14 @@ void LcdTouchDemoTask(void* pdata)
   
   int currentcolor = ILI9341_RED;
   
-  
-  // Declare a Pause button
-  
   //  Adafruit_GFX_Button pauseBottom
   pauseBottom = Adafruit_GFX_Button(); 
   
-  // Declare a Play button
   //Adafruit_GFX_Button playBottom
-  playBottom  = Adafruit_GFX_Button(); 
+  playBottom  = Adafruit_GFX_Button();
   
+  // Adafruit_GFX_Button nextBottom
+  nextBottom = Adafruit_GFX_Button();
   
   pauseBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-30, // x, y center of button
                          60, 50, // width, height
@@ -393,7 +484,7 @@ void LcdTouchDemoTask(void* pdata)
                          1); // text size
   pauseBottom.drawButton(0);
   
- 
+  
   
   playBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-100, ILI9341_TFTHEIGHT-30, // x, y center of button
                         60, 50, // width, height
@@ -405,21 +496,33 @@ void LcdTouchDemoTask(void* pdata)
   playBottom.drawButton(0);
   
   nextBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-30, // x, y center of button
-                        60, 50, // width, height
-                        ILI9341_YELLOW, // outline
-                        ILI9341_BLACK, // fill
-                        ILI9341_YELLOW, // text color
-                        "Next", // label
-                        1); // text size
+  60, 50, // width, height
+  ILI9341_YELLOW, // outline
+  ILI9341_BLACK, // fill
+  ILI9341_YELLOW, // text color
+  "Next", // label
+  1); // text size
   nextBottom.drawButton(0);
   
+  previousBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT+30, // x, y center of button
+  60, 50, // width, height
+  ILI9341_YELLOW, // outline
+  ILI9341_BLACK, // fill
+  ILI9341_YELLOW, // text color
+  "Next", // label
+  1); // text size
+  previousBottom.drawButton(0);
   
   // By Default this will be 0 - False.
   // Meaning that is was Released
-   
+  
   pauseBottom.press(0);
   
   playBottom.press(0);
+  
+  nextBottom.press(0);
+  
+  previousBottom.press(0);
   
   while (1) { 
     boolean touched;
@@ -446,139 +549,110 @@ void LcdTouchDemoTask(void* pdata)
     
     lcdCtrl.fillCircle(p.x, p.y, PENRADIUS, currentcolor);
     
-    /*
-    PauseButton : This will assert the PauseButton,
-    */
     
     if(pauseBottom.contains(p.x, p.y) && pauseBottom.isPressed() == 0)
     {
-      // If So, Check the JustRelease for PauseBtn Indicating, it was released by the interrupt
-      
-     /*   int is_Pressed = pauseBottom.isPressed() ? 1:0;
-        
-        PrintString("\nPause-IsPressed \t");
-        Print_uint32(is_Pressed);
-        PrintString("\n");
-        
-        int is_justReleased = pauseBottom.justReleased() ? 1: 0;
-        
-        PrintString("nPause-JustReleased \t");
-        Print_uint32(is_justReleased);
-        PrintString("\n");
-        
-        int is_justPressed =  pauseBottom.justPressed() ? 1:0;
-        
-        PrintString("nPause-JustPressed \t");
-        Print_uint32(is_justPressed);
-        PrintString("\n");*/
       
       if(pauseBottom.justReleased() == 1 || pauseBottom.justPressed() == 0)
       {
-        // Bit 1 (Pause Btn): Will be 0, indicating PauseBtn is deactived, so we can accept the input 
-        // Bit 2 (Play Btn): Will be 1, indicating PlayBtn is activate and we are running
-        // Check Flags, Bit 0 must be 0 (False), to activate the Pause Btn
-        
-        OSFlagPend(btnFlags ,0x1,OS_FLAG_WAIT_CLR_ALL,0,&err );
-        
-        // If So, Both isPressed and JustPressed must be 0. Enter into a Mutex to Assert the PauseBtn.
-        
-        OSMutexPend(pauseMutex,0, &err);
         
         // Assert Pause Button
-        
         pauseBottom.press(1); 
-        
-        // Exit Mutex
-        OSMutexPost(pauseMutex); 
-        
-        // Pause Button Is Active . So Bit 1 : becames 0 , meaning Playing is Deactived.
-        
-        OSFlagPost(btnFlags ,0x1,OS_FLAG_SET, &err);
-        
         
         if(pauseBottom.isPressed() == 1)
         {
-          // Enter Interrupt
-          OSIntEnter();
-          PauseBtn_Handler();
           
-         // OSTimeDly(10);
+          // Send Control Message to Mailbox
           
-          //OSTimeDly(10);
+          PrintString("\nPause Asserted\n");
+          
+         // ButtonControlsEnum BtnControl_type1 = PAUSE_COMMAND ;
+          
+          OSMboxPost(buttonMBox,(void*)PAUSE_COMMAND);
+          
+          
+          
         }
         
-      }
+      } //OSTimeDly(100);
       
     }
     else if(playBottom.contains(p.x, p.y) && playBottom.isPressed() == 0)
-    {      
+    { 
       
-       /* int is_Pressed = playBottom.isPressed() ? 1:0;
-        
-        PrintString("\nPlay-IsPressed \t");
-        Print_uint32(is_Pressed);
-        PrintString("\n");
-        
-        int is_justReleased = playBottom.justReleased() ? 1: 0;
-        
-        PrintString("Play-JustReleased \t");
-        Print_uint32(is_justReleased);
-        PrintString("\n");
-        
-        int is_justPressed =  playBottom.justPressed() ? 1:0;
-        
-        PrintString("Play-JustPressed \t");
-        Print_uint32(is_justPressed);
-        PrintString("\n");
-      */
       if(playBottom.justReleased() == 1 || playBottom.justPressed() == 0)
       {
-        
-        // Play Button Is Deactived
-        // Pause Button is Active OS_FLAG_WAIT_SET_ALL
-        // OSFlagPend(btnFlags ,0x1,OS_FLAG_WAIT_SET_ALL,0,&err );
-        
-        OSFlagPend(btnFlags ,0x2,OS_FLAG_WAIT_CLR_ALL,0,&err );
-        
-        // If So, Both isPressed and JustPressed must be 0. 
-        // Enter into a Mutex to Assert the PauseBtn.
-        
-        OSMutexPend(pauseMutex,0, &err);
-        
-        // Assert Pause Button
+        // Assert Play Button
         playBottom.press(1); 
-        
-        // Exit Mutex
-        OSMutexPost(pauseMutex);
-        
-        // Play Button Is Active .
-        // So Bit 1 : becames 0 , meaning Pausing is Deactived.
-        
-        OSFlagPost(btnFlags ,0x2,OS_FLAG_SET,&err);
         
         // Call Interrupt
         if(playBottom.isPressed() == 1)
         {
-          // Enter Interrupt
-          OSIntEnter();
-          PlayBtn_Handler();
+          
+          // Send Control Message to Mailbox
+          
+          PrintString("\nPlay Asserted\n");
+          
+         // ButtonControlsEnum BtnControl_type = PLAY_COMMAND ;
+          
+          OSMboxPost(buttonMBox,(void*)PLAY_COMMAND);
+          
+          
         }
       }
-      nextBottom
+      
     }
     else if (nextBottom.contains(p.x, p.y) && nextBottom.isPressed() == 0)
     {
-      if(playBottom.justReleased() == 1 || playBottom.justPressed() == 0)
+      if(nextBottom.justReleased() == 1 || nextBottom.justPressed() == 0)
       {
-         playBottom.press(1);
-         
-         // Enter Interrupt
+        // Assert Next Button
+        nextBottom.press(1); 
+        
+        // Call Interrupt
+        if(nextBottom.isPressed() == 1)
+        {
+          
+          // Send Control Message to Mailbox
+          
+          PrintString("\nNext Asserted\n");
+          
+          // NEXT_COMMAND, PREVIOUS_COMMAND, previousBottom
+          
+          OSMboxPost(buttonMBox,(void*)NEXT_COMMAND);
+          
+          
+        }
       }
     }
-    OSTimeDly(5);
+    else if (previousBottom.contains(p.x, p.y) && previousBottom.isPressed() == 0)
+    {
+      if(previousBottom.justReleased() == 1 || previousBottom.justPressed() == 0)
+      {
+        // Assert Previous Button
+        previousBottom.press(1); 
+        
+        // Call Interrupt
+        if(previousBottom.isPressed() == 1)
+        {
+          
+          // Send Control Message to Mailbox
+          
+          PrintString("\nPrevious Asserted\n");
+          
+          // NEXT_COMMAND, PREVIOUS_COMMAND, previousBottom
+          
+          OSMboxPost(buttonMBox,(void*)PREVIOUS_COMMAND);
+          
+          
+        }
+      }
+    }
+    
+    OSTimeDly(20);
+    
   } 
   
-   //OSTimeDly(15);
 }
 
 
@@ -590,44 +664,44 @@ Runs MP3 demo code
 ************************************************************************************/
 /*void Mp3DemoTask(void* pdata)
 {
-  PjdfErrCode pjdfErr;
-  INT32U length;
-  
-  char buf[BUFSIZE];
-  PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
-  
-  PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
-  // Open handle to the MP3 decoder driver
-  HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
-  if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
-  
-  PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
-  // We talk to the MP3 decoder over a SPI interface therefore
-  // open an instance of that SPI driver and pass the handle to 
-  // the MP3 driver.
-  HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
-  if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
-  
-  length = sizeof(HANDLE);
-  pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
-  if(PJDF_IS_ERROR(pjdfErr)) while(1);
-  
-  // Send initialization data to the MP3 decoder and run a test
-  PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
-  Mp3Init(hMp3);
-  int count = 0;
-  
-  while (1)
-  {
-    OSTimeDly(500);
-    
-    //if(stopSong == OS_FALSE)
-    // {
-    PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
-    Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
-    PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-    // }
-    
+PjdfErrCode pjdfErr;
+INT32U length;
+
+char buf[BUFSIZE];
+PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
+
+PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
+// Open handle to the MP3 decoder driver
+HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
+if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
+
+PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
+// We talk to the MP3 decoder over a SPI interface therefore
+// open an instance of that SPI driver and pass the handle to 
+// the MP3 driver.
+HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
+if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
+
+length = sizeof(HANDLE);
+pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
+if(PJDF_IS_ERROR(pjdfErr)) while(1);
+
+// Send initialization data to the MP3 decoder and run a test
+PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
+Mp3Init(hMp3);
+int count = 0;
+
+while (1)
+{
+OSTimeDly(500);
+
+//if(stopSong == OS_FALSE)
+// {
+PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
+Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
+PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
+// }
+
   }
 }
 */
