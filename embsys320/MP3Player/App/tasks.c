@@ -52,7 +52,9 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 
 #define BUFSIZE 256
 
-#define capacity 3;
+// Music Previous Capacity
+// Should be modified to Total Numbers of Music Files you Have.
+#define CAPACITY 3;
 
 /************************************************************************************
 
@@ -98,7 +100,9 @@ OS_EVENT *pauseMutex;
 // MailBox
 OS_EVENT * buttonMBox;
 
-char *previousSong[] = { "music1", "music2", "music3" };
+char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
+
+//char *previousSong[] = { "music1", "music2", "music3" };
 
 
 typedef enum
@@ -243,74 +247,93 @@ void Mp3SDTask(void* pdata)
   
   File dir = SD.open("/");
   
-  
-    
   while (1)
   {
+    // Reset Values
     uint16_t counter = 0u;
+    uint16_t file_locat  = 0u;
     
     while (1)
     {
       
-      File entry = dir.openNextFile();
+      char * runSong;
       
-      if(prevSong)
+      File entry;
+      
+      // Check is Previous Button is Active
+      
+      if(prevSong && counter > 0)
       {
-         // Check if Array is Empty.
-         // Array Must Contain an Entry to in order To Go Previous.
-         // Counter will be decrement until 0; So entry will be counter.
+        // Set File entry to the Top File Entry in the Array
+        file_locat = counter - 1;
         
-         //if()
+        runSong = prevLists[file_locat];
         
-        PrintWithBuf(buf, BUFSIZE, "Previous =%d\n", counter);
-        
-        // Reset Previous
         prevSong = OS_FALSE;
         
       }
+      else
+      {
+        entry = dir.openNextFile();
+        
+        if (!entry)
+        {
+          break;
+        }
+        if (entry.isDirectory())  // skip directories
+        {
+          entry.close();
+          continue;
+        } 
+        
+        runSong = entry.name();
+        
+        
+      }
       
+      //DrawLcdContents(entry.name(),40, 100);
       
+      PrintWithBuf(buf, BUFSIZE, "Begin streaming sd file  count=%d\n", ++count);                
+      Mp3StreamSDFile(hMp3, runSong); 
+      PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
+      
+      // Add This File, Skipped, To Previous List
+      
+      // Previous Will be Read From Top -> Bottom (FIFO)
+      
+      // NEXT_SONG = TRUE, will just close() and reloop over again
       
       if(nextSong)
       {
-        // ---------- Store Current File Name to Array ----------
+        // ----------- Store Current File Interrupted To Array ------------
+        // get Index
+        /*
+        O Mod 3  = 0, 2 Mod 3 = 2,  
+        */
+        file_locat = counter % CAPACITY;
         
-        uint16_t file_locat = counter % capacity ;
+        // counter = counter % CAPACITY;
         
-        // Insert Into Array before Getting Next Skipped Song
+        // Insert/Capture File Into Array Before the Next Song Plays
         
-        previousSong[file_locat] =  entry.name();     
-        
-        // Open Next File 
-        entry = dir.openNextFile();
+        prevLists[file_locat] =  entry.name();
         
         // Reset Next_Song to False
         nextSong = OS_FALSE;
         
-        // Increment Counter
         
+        
+        // Increment Counter, Something In Previous List        
         counter++;
         
+        PrintWithBuf(buf, BUFSIZE, "File P =%d\n", counter);
+        // Only run when previous button is active, 
+        // will be one entry before exiting.
+        
       }
-    
-      
-      if (!entry)
-      {
-        break;
-      }
-      if (entry.isDirectory())  // skip directories
-      {
-        entry.close();
-        continue;
-      } 
-            
-      //DrawLcdContents(entry.name(),40, 100);
-      
-      PrintWithBuf(buf, BUFSIZE, "Begin streaming sd file  count=%d\n", ++count);                
-      Mp3StreamSDFile(hMp3, entry.name()); 
-      PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
       
       entry.close();
+      
     }
     dir.seek(0); // reset directory file to read again;
   }
@@ -360,12 +383,11 @@ void ControlTask(void* pdata)
       break;
     case NEXT_COMMAND:
       //previousBottom.press(0); 
-      nextBottom.press(1); prevSong = OS_FALSE;  nextSong = OS_TRUE;
+      nextBottom.press(0); prevSong = OS_FALSE;  nextSong = OS_TRUE;
       break;
     case PREVIOUS_COMMAND:
-     // nextBottom.press(0); 
-      //previousBottom.press(0);
-      prevSong = OS_TRUE; nextSong = OS_FALSE;
+      // nextBottom.press(0); 
+      previousBottom.press(0); nextSong = OS_FALSE; prevSong = OS_TRUE;
       break;      
     default:
       PrintString("Error Command");
@@ -496,21 +518,21 @@ void LcdTouchTask(void* pdata)
   playBottom.drawButton(0);
   
   nextBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-30, // x, y center of button
-  60, 50, // width, height
-  ILI9341_YELLOW, // outline
-  ILI9341_BLACK, // fill
-  ILI9341_YELLOW, // text color
-  "Next", // label
-  1); // text size
+                        60, 50, // width, height
+                        ILI9341_YELLOW, // outline
+                        ILI9341_BLACK, // fill
+                        ILI9341_YELLOW, // text color
+                        "Next", // label
+                        1); // text size
   nextBottom.drawButton(0);
   
-  previousBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT+30, // x, y center of button
-  60, 50, // width, height
-  ILI9341_YELLOW, // outline
-  ILI9341_BLACK, // fill
-  ILI9341_YELLOW, // text color
-  "Next", // label
-  1); // text size
+  previousBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-90, // x, y center of button
+                            60, 50, // width, height
+                            ILI9341_YELLOW, // outline
+                            ILI9341_BLACK, // fill
+                            ILI9341_YELLOW, // text color
+                            "Previous", // label
+                            1); // text size
   previousBottom.drawButton(0);
   
   // By Default this will be 0 - False.
@@ -561,16 +583,13 @@ void LcdTouchTask(void* pdata)
         
         if(pauseBottom.isPressed() == 1)
         {
-          
           // Send Control Message to Mailbox
           
           PrintString("\nPause Asserted\n");
           
-         // ButtonControlsEnum BtnControl_type1 = PAUSE_COMMAND ;
+          // ButtonControlsEnum BtnControl_type1 = PAUSE_COMMAND ;
           
           OSMboxPost(buttonMBox,(void*)PAUSE_COMMAND);
-          
-          
           
         }
         
@@ -588,15 +607,13 @@ void LcdTouchTask(void* pdata)
         // Call Interrupt
         if(playBottom.isPressed() == 1)
         {
-          
           // Send Control Message to Mailbox
           
           PrintString("\nPlay Asserted\n");
           
-         // ButtonControlsEnum BtnControl_type = PLAY_COMMAND ;
+          // ButtonControlsEnum BtnControl_type = PLAY_COMMAND ;
           
           OSMboxPost(buttonMBox,(void*)PLAY_COMMAND);
-          
           
         }
       }
@@ -621,7 +638,6 @@ void LcdTouchTask(void* pdata)
           
           OSMboxPost(buttonMBox,(void*)NEXT_COMMAND);
           
-          
         }
       }
     }
@@ -635,7 +651,6 @@ void LcdTouchTask(void* pdata)
         // Call Interrupt
         if(previousBottom.isPressed() == 1)
         {
-          
           // Send Control Message to Mailbox
           
           PrintString("\nPrevious Asserted\n");
@@ -643,7 +658,6 @@ void LcdTouchTask(void* pdata)
           // NEXT_COMMAND, PREVIOUS_COMMAND, previousBottom
           
           OSMboxPost(buttonMBox,(void*)PREVIOUS_COMMAND);
-          
           
         }
       }
@@ -654,8 +668,6 @@ void LcdTouchTask(void* pdata)
   } 
   
 }
-
-
 
 /************************************************************************************
 
