@@ -54,7 +54,7 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 
 // Music Previous Capacity
 // Should be modified to Total Numbers of Music Files you Have.
-#define CAPACITY 3;
+const INT8U CAPACITY = 3;
 
 /************************************************************************************
 
@@ -91,6 +91,11 @@ BOOLEAN stopSong = OS_FALSE;
 
 BOOLEAN prevSong = OS_FALSE;
 
+// Inside ISR_M
+BOOLEAN isr_M = OS_FALSE;
+
+//BOOLEAN isr_items = OS_FALSE;
+
 // Event flags for synchronizing mailbox messages
 //OS_FLAG_GRP *btnFlags = 0;
 
@@ -104,6 +109,7 @@ char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
 
 //char *previousSong[] = { "music1", "music2", "music3" };
 
+File prevFiles[CAPACITY];
 
 typedef enum
 {
@@ -250,27 +256,77 @@ void Mp3SDTask(void* pdata)
   while (1)
   {
     // Reset Values
-    uint16_t counter = 0u;
-    uint16_t file_locat  = 0u;
+    INT8U counter = 0u;
+    
+    // ISR-M 
+    INT8U at_counter = 0u; // After Counter
+    INT8U lp_counter = 0u; // Looping Counter
+    
+    INT8U diff = 0;
     
     while (1)
     {
       
-      char * runSong;
-      
       File entry;
       
-      // Check is Previous Button is Active
+      // Check if we are in isr_M
       
-      if(prevSong && counter > 0)
-      {
-        // Set File entry to the Top File Entry in the Array
-        file_locat = counter - 1;
+      if(isr_M)
+      { 
+        // Get Previous : Previous Button Asserted
         
-        runSong = prevLists[file_locat];
+        if(prevSong)
+        {
+          // Get File using Lp_Counter 
+          entry = prevFiles[lp_counter];
+          
+          // Reset Previous Button
+          prevSong = OS_FALSE;
+          
+          // Decrement LP
+          lp_counter--;
+          
+          // Play Song 
+          PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
+          Mp3StreamSDFile(hMp3, entry.name()); 
+          
+        }
         
-        prevSong = OS_FALSE;
-        
+        if(nextSong)
+        {
+          // Increment LP
+          INT8U t_diff = diff - lp_counter;
+          
+          
+          if(t_diff == 1)
+          {
+            entry = prevFiles[at_counter];
+            
+            lp_counter++;
+          }
+          else
+          {
+            lp_counter = at_counter - diff;
+            
+            
+            entry = prevFiles[lp_counter];
+          }
+          
+          // Reset Previous Button
+          nextSong = OS_FALSE;
+          
+          // Check Whether to Exit isr_M
+          if(lp_counter == at_counter)
+          {
+            isr_M = OS_FALSE;
+          }
+          
+          // Play Song 
+          PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
+          Mp3StreamSDFile(hMp3, entry.name()); 
+          
+        }
+        // Get Next: Next Button Asserted
       }
       else
       {
@@ -284,51 +340,39 @@ void Mp3SDTask(void* pdata)
         {
           entry.close();
           continue;
-        } 
+        }
         
-        runSong = entry.name();
+         // Play Song 
+         PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
+         Mp3StreamSDFile(hMp3, entry.name()); 
         
-        
-      }
-      
-      //DrawLcdContents(entry.name(),40, 100);
-      
-      PrintWithBuf(buf, BUFSIZE, "Begin streaming sd file  count=%d\n", ++count);                
-      Mp3StreamSDFile(hMp3, runSong); 
-      PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-      
-      // Add This File, Skipped, To Previous List
-      
-      // Previous Will be Read From Top -> Bottom (FIFO)
-      
-      // NEXT_SONG = TRUE, will just close() and reloop over again
-      
-      if(nextSong)
-      {
-        // ----------- Store Current File Interrupted To Array ------------
-        // get Index
-        /*
-        O Mod 3  = 0, 2 Mod 3 = 2,  
-        */
-        file_locat = counter % CAPACITY;
-        
-        // counter = counter % CAPACITY;
-        
-        // Insert/Capture File Into Array Before the Next Song Plays
-        
-        prevLists[file_locat] =  entry.name();
-        
-        // Reset Next_Song to False
-        nextSong = OS_FALSE;
-        
-        
-        
-        // Increment Counter, Something In Previous List        
-        counter++;
-        
-        PrintWithBuf(buf, BUFSIZE, "File P =%d\n", counter);
-        // Only run when previous button is active, 
-        // will be one entry before exiting.
+        if(nextSong || prevSong)
+        {        
+          counter = counter % CAPACITY;
+          
+          prevFiles[counter] = entry;
+          
+          // Reset Next_Song to False
+          nextSong = OS_FALSE;
+          
+          // Increment Counter, Something In Previous List 
+          counter++;
+          
+          // Insert Ourself Into isr_M
+          // This is our entry point of intersection 
+          if(isr_M == OS_FALSE && counter > 0 && prevSong)
+          {  
+            isr_M = OS_TRUE;
+            
+            // Set Up AC And LP
+            at_counter = counter -1 ;
+            lp_counter = at_counter - 1;
+            diff = lp_counter;
+          }
+          
+          PrintWithBuf(buf, BUFSIZE, "FileSP =%d\n", counter);
+          
+        }
         
       }
       
@@ -382,12 +426,15 @@ void ControlTask(void* pdata)
       pauseBottom.press(0);  stopSong = OS_FALSE;
       break;
     case NEXT_COMMAND:
-      //previousBottom.press(0); 
-      nextBottom.press(0); prevSong = OS_FALSE;  nextSong = OS_TRUE;
+      prevSong = OS_FALSE;  nextSong = OS_TRUE;
+      // De-assert Button Pressed. 
+      nextBottom.press(0); 
       break;
     case PREVIOUS_COMMAND:
-      // nextBottom.press(0); 
-      previousBottom.press(0); nextSong = OS_FALSE; prevSong = OS_TRUE;
+      prevSong = OS_TRUE; nextSong = OS_FALSE;
+      // De-assert Previous Button. 
+      previousBottom.press(0); 
+      
       break;      
     default:
       PrintString("Error Command");
