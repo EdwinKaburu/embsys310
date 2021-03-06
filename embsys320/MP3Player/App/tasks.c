@@ -105,9 +105,11 @@ OS_EVENT *pauseMutex;
 // MailBox
 OS_EVENT * buttonMBox;
 
-char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
+//char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
 
-//char *previousSong[] = { "music1", "music2", "music3" };
+//char *prevSong[] = { "music1", "music2", "music3" };
+
+//char *prevmusic[CAPACITY];
 
 File prevFiles[CAPACITY];
 
@@ -181,9 +183,10 @@ void StartupTask(void* pdata)
   uint16_t task_prio =APP_TASK_TEST2_PRIO;
   
   // OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
-  OSTaskCreate(Mp3SDTask, (void*)0, &Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
   OSTaskCreate(LcdTouchTask, (void*)0, &LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
+  
+  OSTaskCreate(Mp3SDTask, (void*)0, &Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
   // Control Task Creation
   OSTaskCreate(ControlTask, (void*)0, &ControlTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
@@ -262,71 +265,85 @@ void Mp3SDTask(void* pdata)
     INT8U at_counter = 0u; // After Counter
     INT8U lp_counter = 0u; // Looping Counter
     
-    INT8U diff = 0;
+    //INT8U diff = 0;
     
     while (1)
     {
-      
       File entry;
       
-      // Check if we are in isr_M
+      //char *test_name;
+      
+      // Check if we are in isr_M, and run those files, else read from SD Card.
       
       if(isr_M)
       { 
-        // Get Previous : Previous Button Asserted
+        
+        if( (nextSong || nextSong == OS_FALSE) && prevSong == OS_FALSE)
+        {
+           if(nextSong)
+           {
+             nextSong = OS_FALSE;
+           }
+          
+           // Increment Lp_Counter
+           lp_counter++;
+           
+           // Get File using Lp_Counter 
+          entry = prevFiles[lp_counter];
+           
+          //test_name = prevmusic[lp_counter];
+           
+          // Play Song 
+          PrintWithBuf(buf, BUFSIZE, "\nNP-Begin streaming isr file: %d\n", lp_counter);       
+          
+          //PrintString(entry.name());
+         
+        //  Mp3StreamSDFile(hMp3, entry.name());  
+          
+          //PrintWithBuf(buf, BUFSIZE, "\nNP-Done streaming isr file  count=%d\n", ++count);  
+          
+          // Exit Memory Reading
+          
+          if(lp_counter == at_counter)
+          {
+            isr_M = OS_FALSE; // This will exit ISR_M
+          }
+          
+          
+        }
         
         if(prevSong)
         {
+          // Previous is True, Decrement LP_Counter;
+          lp_counter--;
+          
           // Get File using Lp_Counter 
           entry = prevFiles[lp_counter];
           
-          // Reset Previous Button
-          prevSong = OS_FALSE;
-          
-          // Decrement LP
-          lp_counter--;
+         // test_name = prevmusic[lp_counter];
           
           // Play Song 
-          PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
-          Mp3StreamSDFile(hMp3, entry.name()); 
+          PrintWithBuf(buf, BUFSIZE, "\nP-Begin streaming isr file: %d \n", lp_counter);       
+          
+         // PrintString(entry.name());
+         
+        //  Mp3StreamSDFile(hMp3, entry.name());           
+          
+        //  PrintWithBuf(buf, BUFSIZE, "\nP-Done streaming isr file  count=%d\n", ++count);     
+          
+           // Reset Previous Button
+          prevSong = OS_FALSE;
           
         }
         
-        if(nextSong)
-        {
-          // Increment LP
-          INT8U t_diff = diff - lp_counter;
+        PrintString(entry.name());
+        
+        Mp3StreamSDFile(hMp3, entry.name());          
+        
+        PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at: %d", lp_counter);
+        
+        continue;
           
-          
-          if(t_diff == 1)
-          {
-            entry = prevFiles[at_counter];
-            
-            lp_counter++;
-          }
-          else
-          {
-            lp_counter = at_counter - diff;
-            
-            
-            entry = prevFiles[lp_counter];
-          }
-          
-          // Reset Previous Button
-          nextSong = OS_FALSE;
-          
-          // Check Whether to Exit isr_M
-          if(lp_counter == at_counter)
-          {
-            isr_M = OS_FALSE;
-          }
-          
-          // Play Song 
-          PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
-          Mp3StreamSDFile(hMp3, entry.name()); 
-          
-        }
-        // Get Next: Next Button Asserted
       }
       else
       {
@@ -343,20 +360,30 @@ void Mp3SDTask(void* pdata)
         }
         
          // Play Song 
-         PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);                
-         Mp3StreamSDFile(hMp3, entry.name()); 
+         PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);    
         
-        if(nextSong || prevSong)
-        {        
-          counter = counter % CAPACITY;
+         PrintString(entry.name());
+         
+         Mp3StreamSDFile(hMp3, entry.name()); 
+         
+         PrintWithBuf(buf, BUFSIZE, "\nDone streaming sd file  count=%d\n", ++count);    
+        
+        //if(nextSong || prevSong)
+       // {        
+          counter = counter % CAPACITY; // Will Reset is Counter is Above Capacitor
+          
+          //prevmusic[counter] = entry.name();
           
           prevFiles[counter] = entry;
-          
-          // Reset Next_Song to False
-          nextSong = OS_FALSE;
-          
+                  
           // Increment Counter, Something In Previous List 
           counter++;
+          
+          if(nextSong) // This was Next Button CLick
+          {
+            // Reset Next_Song to False
+            nextSong = OS_FALSE;
+          }
           
           // Insert Ourself Into isr_M
           // This is our entry point of intersection 
@@ -365,19 +392,24 @@ void Mp3SDTask(void* pdata)
             isr_M = OS_TRUE;
             
             // Set Up AC And LP
-            at_counter = counter -1 ;
-            lp_counter = at_counter - 1;
-            diff = lp_counter;
+            at_counter = counter - 1 ;
+            lp_counter = at_counter;
+            //diff = lp_counter;
           }
           
-          PrintWithBuf(buf, BUFSIZE, "FileSP =%d\n", counter);
+          PrintWithBuf(buf, BUFSIZE, "FileSV =%d\n", counter);
           
-        }
-        
+        //}
       }
       
-      entry.close();
+     // PrintString(entry.name());
+        
+     // Mp3StreamSDFile(hMp3, entry.name());          
+        
+      //PrintWithBuf(buf, BUFSIZE, "\nDone streaming  file at\n");
       
+      
+      entry.close();
     }
     dir.seek(0); // reset directory file to read again;
   }
@@ -710,7 +742,7 @@ void LcdTouchTask(void* pdata)
       }
     }
     
-    OSTimeDly(20);
+    OSTimeDly(100);
     
   } 
   
