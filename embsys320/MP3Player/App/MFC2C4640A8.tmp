@@ -97,7 +97,7 @@ BOOLEAN stopSong = OS_FALSE;
 
 BOOLEAN prevSong = OS_FALSE;
 
-BOOLEAN haltPlayer = OS_FALSE; 
+BOOLEAN haltPlayer = OS_TRUE; 
 
 // Inside ISR_M
 BOOLEAN isr_M = OS_FALSE;
@@ -251,7 +251,7 @@ void DisplaySong(char* string, INT16S x, INT16S y, INT16S w, INT16S h)
   //lcdCtrl.fillRect(0,40,120,20,ILI9341_NAVY);
   
   lcdCtrl.fillRect(x,y,w, h,ILI9341_NAVY);
-  
+    
   // Print a message on the LCD
   lcdCtrl.setCursor(x, y); // This was 0, 40
   lcdCtrl.setTextColor(ILI9341_WHITE);  
@@ -296,12 +296,6 @@ void Mp3SDTask(void* pdata)
   Mp3Init(hMp3);
   int count = 0;
   
-  
-  char *music_status = "Playing";
-      
-      // Add To Mail Box
-  OSMboxPost(music_Stats,(void*)music_status);
-  
   //DrawBackGround();
   
   //OS_TIME()
@@ -321,154 +315,145 @@ void Mp3SDTask(void* pdata)
     
     while (1)
     {
+      File entry;
       
-      //if(haltPlayer == OS_FALSE)
-      //{
+      //char *test_name;
+      
+      // Check if we are in isr_M, and run those files, else read from SD Card.
+      
+      if(isr_M)
+      { 
         
-        
-        File entry;
-        
-        //char *test_name;
-        
-        // Check if we are in isr_M, and run those files, else read from SD Card.
-        
-        if(isr_M)
-        { 
+        if(prevSong)
+        {
+          // Previous is True, Decrement LP_Counter;
+          lp_counter--;
           
-          if(prevSong)
-          {
-            // Previous is True, Decrement LP_Counter;
-            lp_counter--;
-            
-            // Get File using Lp_Counter 
-            entry = prevFiles[lp_counter];
-            
-            // test_name = prevmusic[lp_counter];
-            
-            // Play Song 
-            PrintWithBuf(buf, BUFSIZE, "\nP-Begin streaming isr file: %d \n", lp_counter);       
-            
-            // PrintString(entry.name());
-            
-            //  Mp3StreamSDFile(hMp3, entry.name());           
-            
-            //  PrintWithBuf(buf, BUFSIZE, "\nP-Done streaming isr file  count=%d\n", ++count);     
-            
-            // Reset Previous Button
-            prevSong = OS_FALSE;
-            
-          }
-          else
-          {
-            if(nextSong || nextSong == OS_FALSE)
-            {
-              if(nextSong)
-              {
-                // Reset Button
-                nextSong = OS_FALSE;
-              }
-              
-              if(lp_counter < at_counter)
-              {
-                lp_counter++;
-                
-                // Only Play when Lpcounter != at_counter
-                // Get File using Lp_Counter 
-                entry = prevFiles[lp_counter];
-                
-                // Play Song 
-                PrintWithBuf(buf, BUFSIZE, "\nNP-Begin streaming isr file: %d\n", lp_counter);   
-                
-              }
-              else 
-              {
-                if(lp_counter == at_counter)
-                {
-                  isr_M = OS_FALSE; // This will exit ISR_M
-                }
-              }
-              
-            }
-            
-          }
+          // Get File using Lp_Counter 
+          entry = prevFiles[lp_counter];
           
-          //PrintString(entry.name());
+          // test_name = prevmusic[lp_counter];
           
-          OSMboxPost(songDisplay,(void*)entry.name());
+          // Play Song 
+          PrintWithBuf(buf, BUFSIZE, "\nP-Begin streaming isr file: %d \n", lp_counter);       
           
-          Mp3StreamSDFile(hMp3, entry.name());          
+          // PrintString(entry.name());
           
-          PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at: %d", lp_counter);
+          //  Mp3StreamSDFile(hMp3, entry.name());           
           
-          continue;
+          //  PrintWithBuf(buf, BUFSIZE, "\nP-Done streaming isr file  count=%d\n", ++count);     
+          
+          // Reset Previous Button
+          prevSong = OS_FALSE;
           
         }
         else
         {
-          entry = dir.openNextFile();
-          
-          if (!entry)
+          if(nextSong || nextSong == OS_FALSE)
           {
-            break;
-          }
-          if (entry.isDirectory())  // skip directories
-          {
-            entry.close();
-            continue;
-          }
-          
-          // Play Song 
-          PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);    
-          
-          // Send Song Name
-          OSMboxPost(songDisplay,(void*)entry.name());
-          //songDisplay
-          
-          // PrintString(entry.name());
-          
-          Mp3StreamSDFile(hMp3, entry.name()); 
-          
-          PrintWithBuf(buf, BUFSIZE, "\nDone streaming sd file  count=%d\n", ++count);    
-          
-          //if(nextSong || prevSong)
-          // {        
-          counter = counter % CAPACITY; // Will Reset is Counter is Above Capacitor
-          
-          //prevmusic[counter] = entry.name();
-          
-          prevFiles[counter] = entry;
-          
-          // Increment Counter, Something In Previous List 
-          counter++;
-          
-          if(nextSong) // This was Next Button CLick
-          {
-            // Reset Next_Song to False
-            nextSong = OS_FALSE;
-          }
-          
-          // Insert Ourself Into isr_M
-          // This is our entry point of intersection 
-          if(isr_M == OS_FALSE && counter > 0 && prevSong)
-          {  
-            isr_M = OS_TRUE;
+            if(nextSong)
+            {
+              // Reset Button
+              nextSong = OS_FALSE;
+            }
             
-            // Set Up AC And LP
-            at_counter = counter - 1 ;
-            lp_counter = at_counter;
-            //diff = lp_counter;
+            if(lp_counter < at_counter)
+            {
+              lp_counter++;
+              
+              // Only Play when Lpcounter != at_counter
+              // Get File using Lp_Counter 
+              entry = prevFiles[lp_counter];
+              
+              // Play Song 
+              PrintWithBuf(buf, BUFSIZE, "\nNP-Begin streaming isr file: %d\n", lp_counter);   
+              
+            }
+            else 
+            {
+              if(lp_counter == at_counter)
+              {
+                isr_M = OS_FALSE; // This will exit ISR_M
+              }
+            }
+            
           }
           
-          PrintWithBuf(buf, BUFSIZE, "FileSV =%d\n", counter);
-          
-          //}
         }
         
-        entry.close();
+        //PrintString(entry.name());
         
+        OSMboxPost(songDisplay,(void*)entry.name());
         
-      //}
+        Mp3StreamSDFile(hMp3, entry.name());          
+        
+        PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at: %d", lp_counter);
+        
+        continue;
+        
+      }
+      else
+      {
+        entry = dir.openNextFile();
+        
+        if (!entry)
+        {
+          break;
+        }
+        if (entry.isDirectory())  // skip directories
+        {
+          entry.close();
+          continue;
+        }
+        
+        // Play Song 
+        PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);    
+        
+        // Send Song Name
+        OSMboxPost(songDisplay,(void*)entry.name());
+        //songDisplay
+         
+       // PrintString(entry.name());
+        
+        Mp3StreamSDFile(hMp3, entry.name()); 
+        
+        PrintWithBuf(buf, BUFSIZE, "\nDone streaming sd file  count=%d\n", ++count);    
+        
+        //if(nextSong || prevSong)
+        // {        
+        counter = counter % CAPACITY; // Will Reset is Counter is Above Capacitor
+        
+        //prevmusic[counter] = entry.name();
+        
+        prevFiles[counter] = entry;
+        
+        // Increment Counter, Something In Previous List 
+        counter++;
+        
+        if(nextSong) // This was Next Button CLick
+        {
+          // Reset Next_Song to False
+          nextSong = OS_FALSE;
+        }
+        
+        // Insert Ourself Into isr_M
+        // This is our entry point of intersection 
+        if(isr_M == OS_FALSE && counter > 0 && prevSong)
+        {  
+          isr_M = OS_TRUE;
+          
+          // Set Up AC And LP
+          at_counter = counter - 1 ;
+          lp_counter = at_counter;
+          //diff = lp_counter;
+        }
+        
+        PrintWithBuf(buf, BUFSIZE, "FileSV =%d\n", counter);
+        
+        //}
+      }
       
+      entry.close();
     }
     
     dir.seek(0); // reset directory file to read again;
@@ -504,10 +489,10 @@ void ControlTask(void* pdata)
     ButtonControlsEnum* value = BtnControl_type;
     
     PrintWithBuf(buf, BUFSIZE,"Value: %d \t %d \n", value, (*value));
-    
+   
     char *music_status;
     
-    
+   
     switch((int)BtnControl_type)
     {
     case NONE_COMMAND:
@@ -521,10 +506,7 @@ void ControlTask(void* pdata)
       OSMboxPost(music_Stats,(void*)music_status);
       break;
     case PLAY_COMMAND:
-      pauseBottom.press(0);  stopSong = OS_FALSE;
-      
-      haltPlayer = OS_FALSE;
-      
+      pauseBottom.press(0);  stopSong = OS_FALSE; haltPlayer = OS_FALSE;
       music_status = "Playing";
       // Add To Mail Box
       OSMboxPost(music_Stats,(void*)music_status);
@@ -542,14 +524,13 @@ void ControlTask(void* pdata)
       break;      
     default:
       // This is a Halt Assertion: HALT_COMMAND
+      PrintString("System Crashes: Exiting SYSTEM Crash");
+      
       // Set Halt Player. Note : Only Play Button assertion can change it.
-      //haltPlayer = OS_TRUE;
       
-      // De-assert :Make sure Play Button is Released
-      //playBottom.press(0);
+      haltPlayer = OS_TRUE;
       
-      music_status = "Halting";
-      
+       music_status = "Playing";
       // Add To Mail Box
       OSMboxPost(music_Stats,(void*)music_status);
       
@@ -575,7 +556,7 @@ void DisplayTask(void* pdata)
   
   INT8U err;
   char *displayData;
-  char *displayStats;
+ // char *displayStats;
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE,"Display Task building\n");
   
@@ -583,14 +564,10 @@ void DisplayTask(void* pdata)
   {
     // Display Music Status
     
-    if(stopSong == OS_FALSE || stopSong)
-    {
-      displayStats = (char*)OSMboxPend(music_Stats,0,&err);
+    //displayStats = (char*)OSMboxPend(music_Stats,0,&err);
     
-      // Display It
-      DisplaySong(displayStats,0,90,120,20);
-    }
-    
+    // Display It
+   // DisplaySong(displayStats,0,90,120,20);
     
     // Get Something to Display.
     displayData = (char*)OSMboxPend(songDisplay,0,&err);
@@ -739,14 +716,14 @@ void LcdTouchTask(void* pdata)
                             1); // text size
   previousBottom.drawButton(0);
   
-  
+ 
   haltBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-90, // x, y center of button
-                        60, 50, // width, height
-                        ILI9341_YELLOW, // outline
-                        ILI9341_BLACK, // fill
-                        ILI9341_YELLOW, // text color
-                        "Stop", // label
-                        1); // text size
+                         60, 50, // width, height
+                         ILI9341_YELLOW, // outline
+                         ILI9341_BLACK, // fill
+                         ILI9341_YELLOW, // text color
+                         "Stop", // label
+                         1); // text size
   haltBottom.drawButton(0);
   
   // By Default this will be 0 - False.
@@ -884,10 +861,10 @@ void LcdTouchTask(void* pdata)
         haltBottom.press(1);
         
         // Send Button Clicked to Control Task
-        if(haltBottom.isPressed() == 1)
+        if(haltBottom.isPressed(1))
         {
-          PrintString("\nHalt Asserted\n");
-          
+           PrintString("\Halt Asserted\n");
+           
           OSMboxPost(buttonMBox,(void*)HALT_COMMAND);
         }
       }

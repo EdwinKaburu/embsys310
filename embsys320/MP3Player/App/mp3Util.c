@@ -19,6 +19,7 @@ static File dataFile;
 extern BOOLEAN nextSong;
 extern BOOLEAN stopSong;
 extern BOOLEAN prevSong;
+extern BOOLEAN haltPlayer;
 
 
 static void Mp3StreamInit(HANDLE hMp3)
@@ -90,6 +91,11 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
       }
       
       if(prevSong)
+      {
+        break;
+      }
+      
+      if(haltPlayer)
       {
         break;
       }
