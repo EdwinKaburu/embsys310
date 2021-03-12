@@ -58,6 +58,8 @@ long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_m
 // Should be modified to Total Numbers of Music Files you Have.
 const INT8U CAPACITY = 3;
 
+const INT8U QUEUE_CAPACITY = CAPACITY - 1;
+
 /************************************************************************************
 
 Allocate the stacks for each task.
@@ -93,14 +95,23 @@ void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
 // Globals
 BOOLEAN nextSong = OS_FALSE;
 
-BOOLEAN stopSong = OS_FALSE;
+BOOLEAN stopSong = OS_TRUE;
 
 BOOLEAN prevSong = OS_FALSE;
 
-BOOLEAN haltPlayer = OS_FALSE; 
+BOOLEAN haltPlayer = OS_TRUE; 
 
 // Inside ISR_M
 BOOLEAN isr_M = OS_FALSE;
+
+//BOOLEAN Read_Message = OS_FALSE;
+
+//  New Message To Read.
+BOOLEAN Read_Update = OS_FALSE;
+
+BOOLEAN Read_MailUpdate = OS_FALSE;
+
+BOOLEAN After_Start = OS_FALSE;
 
 //BOOLEAN isr_items = OS_FALSE;
 
@@ -114,11 +125,17 @@ OS_EVENT *pauseMutex;
 OS_EVENT * buttonMBox;
 
 // Mail Box
-OS_EVENT * songDisplay;
+//OS_EVENT * songDisplay;
 
 // Mail Box
-OS_EVENT * music_Stats;
+OS_EVENT * mstatus_Change; // Interrupted Music Status
 
+// Define Music Status
+void *qMusicStatus[QUEUE_CAPACITY];
+
+OS_EVENT *queueMusic;
+
+//INT16U rdOnce;
 //char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
 
 //char *prevSong[] = { "music1", "music2", "music3" };
@@ -169,9 +186,14 @@ void StartupTask(void* pdata)
   
   buttonMBox = OSMboxCreate(NULL);
   
-  songDisplay = OSMboxCreate(NULL);
+  // songDisplay = OSMboxCreate(NULL);
   
-  music_Stats = OSMboxCreate(NULL);
+  //music_Stats = OSMboxCreate(NULL);
+  
+  mstatus_Change = OSMboxCreate(NULL);
+  
+  // Create Music Queue
+  queueMusic = OSQCreate(qMusicStatus, QUEUE_CAPACITY);
   
   // Initialize SD card
   //PrintWithBuf(buf, PRINTBUFMAX, "Opening handle to SD driver: %s\n", PJDF_DEVICE_ID_SD_ADAFRUIT);
@@ -269,6 +291,8 @@ RUN SD TASK CODE
 
 void Mp3SDTask(void* pdata)
 {
+  INT8U err;
+  
   PjdfErrCode pjdfErr;
   INT32U length;
   
@@ -297,10 +321,28 @@ void Mp3SDTask(void* pdata)
   int count = 0;
   
   
-  char *music_status = "Playing";
-      
-      // Add To Mail Box
-  OSMboxPost(music_Stats,(void*)music_status);
+  char *music_status = "Halting";
+  
+  
+  //Read_Message = OS_TRUE;
+  
+  //Read_Update = OS_TRUE;
+  
+  //Read_MailUpdate = OS_TRUE;
+  Read_Update = OS_TRUE;
+  
+  
+  // Insert Into Mail Box;
+  
+  // Add To Mail Box
+  //OSMboxPost(mstatus_Change,(void*)music_status);
+  
+  err = OSQPost(queueMusic, (void*)music_status); // Display Name
+  
+  err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
+  
+  // Add To Mail Box. HaltPlayer is Set To True
+  //OSMboxPost(mstatus_Change,(void*)music_status);
   
   //DrawBackGround();
   
@@ -319,14 +361,28 @@ void Mp3SDTask(void* pdata)
     
     //INT8U diff = 0;
     
-    while (1)
+    // Set Music Status To Playing
+    
+    if(haltPlayer)
+    {
+      OSTimeDly(300);
+    }
+    else
     {
       
-      //if(haltPlayer == OS_FALSE)
-      //{
+      After_Start = OS_TRUE;
+      // Loop To Play Song
+      
+      while (1)
+      {
+        
+        //if(haltPlayer == OS_FALSE)
+        //{
         
         
         File entry;
+        
+        music_status = "Playing";
         
         //char *test_name;
         
@@ -338,6 +394,7 @@ void Mp3SDTask(void* pdata)
           if(prevSong)
           {
             // Previous is True, Decrement LP_Counter;
+            
             lp_counter--;
             
             // Get File using Lp_Counter 
@@ -394,7 +451,23 @@ void Mp3SDTask(void* pdata)
           
           //PrintString(entry.name());
           
-          OSMboxPost(songDisplay,(void*)entry.name());
+          //OSMboxPost(songDisplay,(void*)entry.name());
+          
+          // Add To Queue : For Display Purposes
+          //music_status
+          
+          //  Read_Message = OS_FALSE;
+          
+          Read_Update = OS_TRUE;
+          
+          err = OSQPost(queueMusic, (void*)entry.name()); // Display Name
+          
+          err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
+          
+          
+         
+          
+          //PrintWithBuf(buf, BUFSIZE,"\n%d \n", err);
           
           Mp3StreamSDFile(hMp3, entry.name());          
           
@@ -421,10 +494,21 @@ void Mp3SDTask(void* pdata)
           PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);    
           
           // Send Song Name
-          OSMboxPost(songDisplay,(void*)entry.name());
+          //OSMboxPost(songDisplay,(void*)entry.name());
           //songDisplay
           
           // PrintString(entry.name());
+          
+          
+          //Read_Message = OS_FALSE;
+          
+          Read_Update = OS_TRUE;
+          
+          err = OSQPost(queueMusic, (void*)entry.name()); // Display Name
+          
+          err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
+         
+          
           
           Mp3StreamSDFile(hMp3, entry.name()); 
           
@@ -467,9 +551,13 @@ void Mp3SDTask(void* pdata)
         entry.close();
         
         
-      //}
+        //}
+        
+      }
+      
       
     }
+    
     
     dir.seek(0); // reset directory file to read again;
     
@@ -516,42 +604,85 @@ void ControlTask(void* pdata)
     case PAUSE_COMMAND:
       playBottom.press(0); stopSong = OS_TRUE;
       
+      //Read_Message = OS_TRUE;
+      
+      Read_Update = OS_TRUE;
+      
+      Read_MailUpdate = OS_TRUE;
+      
       music_status = "Paused";
       // Add To Mail Box
-      OSMboxPost(music_Stats,(void*)music_status);
+      OSMboxPost(mstatus_Change,(void*)music_status);
       break;
     case PLAY_COMMAND:
-      pauseBottom.press(0);  stopSong = OS_FALSE;
+      pauseBottom.press(0);  
+      haltBottom.press(0);
       
       haltPlayer = OS_FALSE;
       
+      stopSong = OS_FALSE;
+      
+      if(After_Start)
+      {
+        Read_Update = OS_TRUE;
+      
+      Read_MailUpdate = OS_TRUE;
+      
       music_status = "Playing";
       // Add To Mail Box
-      OSMboxPost(music_Stats,(void*)music_status);
+      OSMboxPost(mstatus_Change,(void*)music_status);
+      }
+     
+      
       
       break;
     case NEXT_COMMAND:
       prevSong = OS_FALSE;  nextSong = OS_TRUE;
+      
       // De-assert Button Pressed. 
       nextBottom.press(0); 
+      
+      pauseBottom.press(0);
+      
+      // Un-Pause Song if paused.
+      // Condition will be taken care off by the Button Click Capture.
+      // We are not un-Halting the entire music player, just the song.
+      stopSong = OS_FALSE;
+      
+      
       break;
     case PREVIOUS_COMMAND:
+      
       prevSong = OS_TRUE; nextSong = OS_FALSE;
-      // De-assert Previous Button. 
+      
       previousBottom.press(0); 
+      pauseBottom.press(0);
+      
+      // Un-Pause Song if paused.
+      // Condition will be taken care off by the Button Click Capture.
+      // We are not un-Halting the entire music player, just the song.
+      stopSong = OS_FALSE;
+            
       break;      
     default:
-      // This is a Halt Assertion: HALT_COMMAND
-      // Set Halt Player. Note : Only Play Button assertion can change it.
-      //haltPlayer = OS_TRUE;
+      // Set Halt Player  To True
       
-      // De-assert :Make sure Play Button is Released
-      //playBottom.press(0);
+      haltPlayer = OS_TRUE;
+      // Set Stop Song To True
+      stopSong = OS_TRUE;
+      
+      // Release Play Button if Locked
+      playBottom.press(0);
+      
+     // Read_Message = OS_TRUE;
+      
+      Read_Update = OS_TRUE;
+      
+      Read_MailUpdate = OS_TRUE;
       
       music_status = "Halting";
-      
       // Add To Mail Box
-      OSMboxPost(music_Stats,(void*)music_status);
+      OSMboxPost(mstatus_Change,(void*)music_status);
       
       break;
     }
@@ -574,45 +705,97 @@ void DisplayTask(void* pdata)
   // Get Message Box Data
   
   INT8U err;
-  char *displayData;
-  char *displayStats;
+  
+  INT16U rdOnce = 0; // Read Once
+  //char *displayData;
+  //char *displayStats;
+  char *display_name;
+  char *display_status;
+  
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE,"Display Task building\n");
   
+  // while(1)
+  //{
+  
+  // Display Music Name and Status
+  
+  //display_name = (char*)OSQPend(queueMusic,100,&err);
+  
+  
+  
+  //display_status = (char*)OSQPend(queueMusic,100,&err);
+  
+  
+  // DisplaySong(display_name,0,40,120,20);
+  
+  //DisplaySong(display_status,0,90,120,20);
+  
   while(1)
   {
-    // Display Music Status
-    
-    if(stopSong == OS_FALSE || stopSong)
+    if(Read_Update)
     {
-      displayStats = (char*)OSMboxPend(music_Stats,0,&err);
-    
-      // Display It
-      DisplaySong(displayStats,0,90,120,20);
+      if(Read_MailUpdate)
+      {
+        // Could be Halt Command or Pause Command or Stop Command or Begining of 
+        // Music Player
+        
+        // Read from Mail Box
+        display_status = (char*)OSMboxPend(mstatus_Change,0,&err);
+        
+        //DisplaySong(display_status,0,40,120,20);
+        //DisplaySong(display_status,0,90,120,20);
+        //continue;
+      }
+      else
+      {
+        // Read From Queue 
+               
+        display_name = (char*)OSQPend(queueMusic,0,&err);
+        
+        display_status = (char*)OSQPend(queueMusic,0,&err);
+        
+        rdOnce = 0;
+        
+      }
+      
+      // Display Values
+      if(rdOnce == 0)
+      {
+        DisplaySong(display_name,0,40,150,20);
+      }
+      
+      DisplaySong(display_status,0,90,150,20);
+      
+      
+      // Reset Booleans
+      rdOnce++;
+      Read_MailUpdate = OS_FALSE;
+      Read_Update = OS_FALSE;
+      
     }
+  
+     OSTimeDly(100);
     
+    /*
+    if(rdOnce > 0)
+    {
+     
+    }
+    else
+    {
+      Read_MailUpdate
+      
+     
+      
+      rdOnce++;
+    }
+    */
     
-    // Get Something to Display.
-    displayData = (char*)OSMboxPend(songDisplay,0,&err);
-    
-    // Display It
-    DisplaySong(displayData,0,40,120,20);
     
   }
   
 }
-
-/*
-static void PlayPauseContext()
-{
-OS_CPU_SR  cpu_sr;
-
-OS_ENTER_CRITICAL();
-
-pauseBottom.press(0);  stopSong = OS_FALSE;
-
-OS_EXIT_CRITICAL();
-}*/
 
 /*******************************************************************************
 
@@ -785,8 +968,8 @@ void LcdTouchTask(void* pdata)
     
     lcdCtrl.fillCircle(p.x, p.y, PENRADIUS, currentcolor);
     
-    
-    if(pauseBottom.contains(p.x, p.y) && pauseBottom.isPressed() == 0)
+    // Don't Accept Buttons when HaltPlayer is set To True, Apart from Play Button
+    if(pauseBottom.contains(p.x, p.y) && pauseBottom.isPressed() == 0 && !haltPlayer)
     {
       
       if(pauseBottom.justReleased() == 1 || pauseBottom.justPressed() == 0)
@@ -833,7 +1016,7 @@ void LcdTouchTask(void* pdata)
       }
       
     }
-    else if (nextBottom.contains(p.x, p.y) && nextBottom.isPressed() == 0)
+    else if (nextBottom.contains(p.x, p.y) && nextBottom.isPressed() == 0 && !haltPlayer)
     {
       if(nextBottom.justReleased() == 1 || nextBottom.justPressed() == 0)
       {
@@ -855,7 +1038,7 @@ void LcdTouchTask(void* pdata)
         }
       }
     }
-    else if (previousBottom.contains(p.x, p.y) && previousBottom.isPressed() == 0)
+    else if (previousBottom.contains(p.x, p.y) && previousBottom.isPressed() == 0 && !haltPlayer)
     {
       if(previousBottom.justReleased() == 1 || previousBottom.justPressed() == 0)
       {
@@ -876,7 +1059,7 @@ void LcdTouchTask(void* pdata)
         }
       }
     }//haltBottom
-    else if(haltBottom.contains(p.x, p.y) && haltBottom.isPressed() == 0)
+    else if(haltBottom.contains(p.x, p.y) && haltBottom.isPressed() == 0 && !haltPlayer)
     {
       if(haltBottom.justReleased() == 1 || haltBottom.justPressed() == 0)
       {

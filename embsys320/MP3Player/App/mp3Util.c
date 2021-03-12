@@ -95,10 +95,8 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
         break;
       }
       
-      if(haltPlayer)
-      {
-        break;
-      }
+      // Don't Break when Halted.
+      
     }
     
     
