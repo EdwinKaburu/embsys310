@@ -17,8 +17,26 @@ const INT8U BspMp3TestMode[] =  { 0x02, 0x00, 0x08, 0x20 };
 const INT8U BspMp3PlayMode[] =  { 0x02, 0x00, 0x08, 0x00 };
 const INT8U BspMp3SoftReset[] = { 0x02, 0x00, 0x08, 0x04 };
 const INT8U BspMp3SetClockF[] = { 0x02, 0x03, 0x98, 0x00 };
-const INT8U BspMp3SetVol1010[] = { 0x02, 0x0B, 0x10, 0x10 };
-const INT8U BspMp3SetVol6060[] = { 0x02, 0x0B, 0x60, 0x60 };
+
+const INT8U BspMp3SetVol1010[] = { 0x02, 0x0B, 0x00, 0x00 };
+
+
+//INT8U BspMp3SetVolCustom = { 0x02, 0x0B, 0x60, 0x60 };
+
+/*const INT8U BspMp3SetVol2020[] = { 0x02, 0x0B, 0x20, 0x20 };
+const INT8U BspMp3SetVol3030[] = { 0x02, 0x0B, 0x30, 0x30 };
+
+const INT8U BspMp3SetVol4040[] = { 0x02, 0x0B, 0x50, 0x50 };
+const INT8U BspMp3SetVol5050[] = { 0x02, 0x0B, 0x50, 0x50 };*/
+
+// Default Volume, 
+const INT8U BspMp3SetVol6060[] = { 0x02, 0x0B, 0x00, 0x00 };
+/*
+const INT8U BspMp3SetVol7070[] = { 0x02, 0x0B, 0x70, 0x70 };
+const INT8U BspMp3SetVol8080[] = { 0x02, 0x0B, 0x80, 0x80 };
+
+const INT8U BspMp3SetVol9090[] = { 0x02, 0x0B, 0x90, 0x90 };
+*/
 const INT8U BspMp3ReadVol[] = { 0x3, 0x0B, 0x00, 0x00 };
 
 // Lengths of the above commands
@@ -28,8 +46,25 @@ const INT8U BspMp3TestModeLen = sizeof(BspMp3TestMode);
 const INT8U BspMp3PlayModeLen = sizeof(BspMp3PlayMode);
 const INT8U BspMp3SoftResetLen = sizeof(BspMp3SoftReset);
 const INT8U BspMp3SetClockFLen = sizeof(BspMp3SetClockF);
+
+//const INT8U VolumeLength = sizeof(BspMp3SetVol1010);
+
 const INT8U BspMp3SetVol1010Len = sizeof(BspMp3SetVol1010);
+/*
+const INT8U BspMp3SetVol2020Len = sizeof(BspMp3SetVol2020);
+const INT8U BspMp3SetVol3030Len = sizeof(BspMp3SetVol3030);
+const INT8U BspMp3SetVol4040Len = sizeof(BspMp3SetVol4040);
+const INT8U BspMp3SetVol5050Len = sizeof(BspMp3SetVol5050);
+*/
+
 const INT8U BspMp3SetVol6060Len = sizeof(BspMp3SetVol6060);
+/*
+const INT8U BspMp3SetVol7070Len = sizeof(BspMp3SetVol7070);
+const INT8U BspMp3SetVol8080Len = sizeof(BspMp3SetVol8080);
+const INT8U BspMp3SetVol9090Len = sizeof(BspMp3SetVol9090);
+*/
+
+
 const INT8U BspMp3ReadVolLen = sizeof(BspMp3ReadVol);
 
 

@@ -12,6 +12,8 @@ The tasks that are executed by the test application.
 
 2016/2 Nick Strathy adapted it for NUCLEO-F401RE 
 
+2020/2 Edwin Kaburu adapted it for  STM 32L475VG
+
 ************************************************************************************/
 
 
@@ -42,6 +44,11 @@ Adafruit_GFX_Button nextBottom;
 Adafruit_GFX_Button previousBottom;
 
 Adafruit_GFX_Button haltBottom;
+
+Adafruit_GFX_Button VolIncBottom;
+
+Adafruit_GFX_Button VolDesBottom;
+
 
 
 #define PENRADIUS 3
@@ -113,6 +120,8 @@ BOOLEAN Read_MailUpdate = OS_FALSE;
 
 BOOLEAN After_Start = OS_FALSE;
 
+BOOLEAN SystemVolUp = OS_FALSE;
+
 //BOOLEAN isr_items = OS_FALSE;
 
 // Event flags for synchronizing mailbox messages
@@ -130,10 +139,16 @@ OS_EVENT * buttonMBox;
 // Mail Box
 OS_EVENT * mstatus_Change; // Interrupted Music Status
 
+// Mail Box
+
+OS_EVENT * volume_Change; // Volume Change
+
 // Define Music Status
 void *qMusicStatus[QUEUE_CAPACITY];
 
 OS_EVENT *queueMusic;
+
+static HANDLE hMp3;
 
 //INT16U rdOnce;
 //char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
@@ -146,7 +161,8 @@ File prevFiles[CAPACITY];
 
 typedef enum
 {
-  NONE_COMMAND,
+  VOLUP_COMMAND,
+  VOLDW_COMMAND,
   PAUSE_COMMAND,
   PLAY_COMMAND,
   NEXT_COMMAND,
@@ -154,7 +170,9 @@ typedef enum
   HALT_COMMAND
 }ButtonControlsEnum;
 
+INT8U DefVolume =  0x00;
 
+//char volumeDigit[3];
 
 /************************************************************************************
 
@@ -191,6 +209,8 @@ void StartupTask(void* pdata)
   //music_Stats = OSMboxCreate(NULL);
   
   mstatus_Change = OSMboxCreate(NULL);
+  
+  volume_Change = OSMboxCreate(NULL);
   
   // Create Music Queue
   queueMusic = OSQCreate(qMusicStatus, QUEUE_CAPACITY);
@@ -301,7 +321,7 @@ void Mp3SDTask(void* pdata)
   
   // PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
   // Open handle to the MP3 decoder driver
-  HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
+  hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
   if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
   
   PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
@@ -395,7 +415,11 @@ void Mp3SDTask(void* pdata)
           {
             // Previous is True, Decrement LP_Counter;
             
-            lp_counter--;
+            if(lp_counter != 0)
+            {
+              lp_counter--;
+            }
+            
             
             // Get File using Lp_Counter 
             entry = prevFiles[lp_counter];
@@ -472,7 +496,7 @@ void Mp3SDTask(void* pdata)
           Mp3StreamSDFile(hMp3, entry.name());          
           
           PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at: %d", lp_counter);
-          
+         // DefVolume =  0x00;
           continue;
           
         }
@@ -514,6 +538,8 @@ void Mp3SDTask(void* pdata)
           
           PrintWithBuf(buf, BUFSIZE, "\nDone streaming sd file  count=%d\n", ++count);    
           
+         // DefVolume =  0x00;
+          
           //if(nextSong || prevSong)
           // {        
           counter = counter % CAPACITY; // Will Reset is Counter is Above Capacitor
@@ -540,6 +566,9 @@ void Mp3SDTask(void* pdata)
             // Set Up AC And LP
             at_counter = counter - 1 ;
             lp_counter = at_counter;
+            
+            PrintWithBuf(buf, BUFSIZE, "\nInserted at_co: %d lp_co : %d\n", at_counter, lp_counter);  
+            
             //diff = lp_counter;
           }
           
@@ -577,6 +606,8 @@ void ControlTask(void* pdata)
   ButtonControlsEnum *BtnControl_type;
   
   
+
+  
   PrintWithBuf(buf, BUFSIZE,"Control Task building\n");
   
   //OS_CPU_SR  cpu_sr;
@@ -595,11 +626,91 @@ void ControlTask(void* pdata)
     
     char *music_status;
     
+    char volumeDigit[7];
     
+    INT8U displayVolume;
+    
+    OS_CPU_SR  cpu_sr;
     switch((int)BtnControl_type)
     {
-    case NONE_COMMAND:
-      PrintString("None Command");
+    case VOLUP_COMMAND:
+      //PrintString("None Command");
+      
+      // De-Assert Volume
+      VolIncBottom.press(0);
+      
+      // Increase Volume
+      SystemVolUp = OS_TRUE;
+      
+      if(DefVolume != 0x00)
+      {
+        // Increase Volume
+         DefVolume =  DefVolume - 0xA; // subtract 10
+         
+         OS_ENTER_CRITICAL();
+         
+         Mp3VolumeUpDown(hMp3);
+     
+         OS_EXIT_CRITICAL();
+      }
+      
+      // Send To Display
+      
+      Read_Update = OS_TRUE;
+      
+      Read_MailUpdate = OS_TRUE;
+      
+     // sprintf(volumeDigit,"%d",DefVolume);
+      
+      
+      //PrintWithBuf(buf, BUFSIZE,"\nVolume: %s\n", volumeDigit);
+      
+        // Display Volume
+      
+      displayVolume = 0x64 - DefVolume;
+      
+      snprintf(volumeDigit,7,"%d %s", displayVolume, "%%");
+      
+      OSMboxPost(volume_Change, (void*) volumeDigit);
+            
+      OSTimeDly(100);
+      
+      break;
+    case VOLDW_COMMAND:
+      
+      // De-Assert Volume
+      VolDesBottom.press(0);
+      
+      // Decrese Volume
+      SystemVolUp = OS_TRUE;
+      
+      if(DefVolume < 0x64) // used to be 0x90
+      {
+         // Decrease Volume
+         DefVolume =  DefVolume + 0xA; // Add 10
+         
+         OS_ENTER_CRITICAL();
+         
+         Mp3VolumeUpDown(hMp3);
+      
+         OS_EXIT_CRITICAL();
+      }
+      
+      Read_Update = OS_TRUE;
+      
+      Read_MailUpdate = OS_TRUE;
+      
+      // Display Volume
+      
+      displayVolume = 0x64 - DefVolume;
+      
+      snprintf(volumeDigit,7,"%d %s", displayVolume, "%%");
+      //PrintWithBuf(buf, BUFSIZE,"\nVolume: %s\n", volumeDigit);
+        
+      OSMboxPost(volume_Change, (void*) volumeDigit);
+      
+      OSTimeDly(100);
+      
       break;
     case PAUSE_COMMAND:
       playBottom.press(0); stopSong = OS_TRUE;
@@ -633,8 +744,6 @@ void ControlTask(void* pdata)
       OSMboxPost(mstatus_Change,(void*)music_status);
       }
      
-      
-      
       break;
     case NEXT_COMMAND:
       prevSong = OS_FALSE;  nextSong = OS_TRUE;
@@ -711,25 +820,11 @@ void DisplayTask(void* pdata)
   //char *displayStats;
   char *display_name;
   char *display_status;
+  char *display_volume = "100 %%";
   
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE,"Display Task building\n");
-  
-  // while(1)
-  //{
-  
-  // Display Music Name and Status
-  
-  //display_name = (char*)OSQPend(queueMusic,100,&err);
-  
-  
-  
-  //display_status = (char*)OSQPend(queueMusic,100,&err);
-  
-  
-  // DisplaySong(display_name,0,40,120,20);
-  
-  //DisplaySong(display_status,0,90,120,20);
+ 
   
   while(1)
   {
@@ -740,12 +835,24 @@ void DisplayTask(void* pdata)
         // Could be Halt Command or Pause Command or Stop Command or Begining of 
         // Music Player
         
-        // Read from Mail Box
-        display_status = (char*)OSMboxPend(mstatus_Change,0,&err);
         
-        //DisplaySong(display_status,0,40,120,20);
-        //DisplaySong(display_status,0,90,120,20);
-        //continue;
+        // Check for Volume Update
+        
+        if(SystemVolUp )
+        {
+          // Capture Volume Data in MailBox
+          
+          display_volume = (char*)OSMboxPend(volume_Change,100,&err);
+          
+          //DisplaySong(display_volume, 0, 140, 100,20);
+          
+        }
+        else
+        {
+           // Read from Mail Box
+           display_status = (char*)OSMboxPend(mstatus_Change,100,&err);
+        }
+                
       }
       else
       {
@@ -766,33 +873,21 @@ void DisplayTask(void* pdata)
       }
       
       DisplaySong(display_status,0,90,150,20);
-      
+     
+      // Display Volume
+      DisplaySong(display_volume, 0, 140, 100,20);
       
       // Reset Booleans
       rdOnce++;
       Read_MailUpdate = OS_FALSE;
       Read_Update = OS_FALSE;
       
+      SystemVolUp = OS_FALSE;
+      
     }
   
      OSTimeDly(100);
-    
-    /*
-    if(rdOnce > 0)
-    {
-     
-    }
-    else
-    {
-      Read_MailUpdate
-      
-     
-      
-      rdOnce++;
-    }
-    */
-    
-    
+  
   }
   
 }
@@ -883,6 +978,11 @@ void LcdTouchTask(void* pdata)
   // Adafruit_GFX_Button previousBottom
   previousBottom = Adafruit_GFX_Button();
   
+  // Adafruit_GFX_Bitton VolIncBottom
+  VolIncBottom = Adafruit_GFX_Button();
+  
+  // Adafruit_GFX_Bitton VolDesBottom
+  VolDesBottom = Adafruit_GFX_Button();
   
   pauseBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-30, // x, y center of button
                          60, 50, // width, height
@@ -932,6 +1032,28 @@ void LcdTouchTask(void* pdata)
                         1); // text size
   haltBottom.drawButton(0);
   
+  VolIncBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-150, // x, y center of button
+                        60, 50, // width, height
+                        ILI9341_YELLOW, // outline
+                        ILI9341_BLACK, // fill
+                        ILI9341_YELLOW, // text color
+                        "Vol Up", // label
+                        1); // text size
+  VolIncBottom.drawButton(0);
+  
+  
+  VolDesBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-210, // x, y center of button
+                        60, 50, // width, height
+                        ILI9341_YELLOW, // outline
+                        ILI9341_BLACK, // fill
+                        ILI9341_YELLOW, // text color
+                        "Vol Down", // label
+                        1); // text size
+  VolDesBottom.drawButton(0);
+  
+  
+  //VolDesBottom
+  
   // By Default this will be 0 - False.
   // Meaning that is was Released
   
@@ -942,6 +1064,8 @@ void LcdTouchTask(void* pdata)
   nextBottom.press(0);
   
   previousBottom.press(0);
+  
+  VolIncBottom.press(0);
   
   while (1) { 
     boolean touched;
@@ -1072,6 +1196,38 @@ void LcdTouchTask(void* pdata)
           PrintString("\nHalt Asserted\n");
           
           OSMboxPost(buttonMBox,(void*)HALT_COMMAND);
+        }
+      }
+    }
+    else if(VolIncBottom.contains(p.x, p.y) && VolIncBottom.isPressed() == 0 && !haltPlayer)
+    {
+      if(VolIncBottom.justReleased() == 1 || VolIncBottom.justPressed() == 0)
+      {
+        // Assert Vol Up Button
+        VolIncBottom.press(1);
+        
+        // Send Button Clicked to Control Task
+        if(VolIncBottom.isPressed() == 1)
+        {
+          PrintString("\nIncrease Volume \n");
+          
+          OSMboxPost(buttonMBox,(void*)VOLUP_COMMAND);
+        }
+      }
+    }
+    else if(VolDesBottom.contains(p.x, p.y) && VolDesBottom.isPressed() == 0 && !haltPlayer)
+    {
+      if(VolDesBottom.justReleased() == 1 || VolDesBottom.justPressed() == 0)
+      {
+        // Assert Vol Down Button
+        VolDesBottom.press(1);
+        
+        // Send Button Clicked to Control Task
+        if(VolDesBottom.isPressed() == 1)
+        {
+          PrintString("\nDecrease Volume \n");
+          
+          OSMboxPost(buttonMBox,(void*)VOLDW_COMMAND);
         }
       }
     }

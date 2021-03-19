@@ -19,7 +19,15 @@ static File dataFile;
 extern BOOLEAN nextSong;
 extern BOOLEAN stopSong;
 extern BOOLEAN prevSong;
-extern BOOLEAN haltPlayer;
+
+//extern BOOLEAN SystemVolUp;
+
+extern INT8U DefVolume;
+
+INT8U BspMp3SetVolCustom[4];
+
+BOOLEAN resetVolume = OS_TRUE;
+//INT32U VolumeLength;
 
 
 static void Mp3StreamInit(HANDLE hMp3)
@@ -34,15 +42,38 @@ static void Mp3StreamInit(HANDLE hMp3)
   Write(hMp3, (void*)BspMp3SoftReset, &length);
   
   // Set volume
-  length = BspMp3SetVol1010Len;
-  Write(hMp3, (void*)BspMp3SetVol1010, &length);
+  //length = BspMp3SetVol1010Len;
+  //Write(hMp3, (void*)BspMp3SetVol1010, &length);
   
   // To allow streaming data, set the decoder mode to Play Mode
   length = BspMp3PlayModeLen;
   Write(hMp3, (void*)BspMp3PlayMode, &length);
   
-  // Set MP3 driver to data mode (subsequent writes will be sent to decoder's data interface)
+  
+  // Copy a Copy of BspMp3SetVol1010
+  
+  if(resetVolume)
+  {
+    for(INT8U loop = 0; loop < 4; loop++) {
+    
+    BspMp3SetVolCustom[loop] = BspMp3SetVol1010[loop];
+    
+     }
+    
+    resetVolume = OS_FALSE;
+  }
+  
+  
+  
+  length = BspMp3SetVol1010Len;
+  
+  // Set Volume: Write Our Custom Volume
+  Write(hMp3, (void*)BspMp3SetVolCustom, &length);
+  
+   // Set MP3 driver to data mode (subsequent writes will be sent to decoder's data interface)
   Ioctl(hMp3, PJDF_CTRL_MP3_SELECT_DATA, 0, 0);
+  
+  
 }
 
 // Mp3StreamSDFile
@@ -95,10 +126,9 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
         break;
       }
       
-      // Don't Break when Halted.
+      // Don't Break when Halted, only during NextSong or PrevSong.
       
     }
-    
     
   }
   
@@ -210,6 +240,46 @@ PjdfErrCode Mp3GetRegister(HANDLE hMp3, INT8U *cmdInDataOut, INT32U bufLen)
   retval = Read(hMp3, cmdInDataOut, &bufLen);
   return retval;
 }
+
+void Mp3VolumeUpDown(HANDLE hMp3)
+{
+  INT32U length;
+   // Write To Chip
+    Ioctl(hMp3, PJDF_CTRL_MP3_SELECT_COMMAND, 0, 0);
+  
+    
+    /*if(SystemVolUp )
+    {
+      // We can Increment the Volume
+      if(DefVolume != 0x00)
+      {
+        // Increase Volume
+         DefVolume =  DefVolume - 0x10;
+      }
+      
+    }
+    else
+    {
+      if(DefVolume < 0x90)
+      {
+         // Decrease Volume
+         DefVolume =  DefVolume + 0x10;
+      }
+    }
+    */
+    
+    BspMp3SetVolCustom[2] = DefVolume;
+    BspMp3SetVolCustom[3] = DefVolume;
+
+    length = BspMp3SetVol1010Len;
+    
+    // Write To vs 1053 Chip    
+    Write(hMp3, (void*)BspMp3SetVolCustom, &length);
+    
+    // Switch Back to Select Data.
+    Ioctl(hMp3, PJDF_CTRL_MP3_SELECT_DATA, 0, 0);   
+}
+
 
 
 // Mp3Test

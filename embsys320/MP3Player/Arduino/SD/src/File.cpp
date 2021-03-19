@@ -153,6 +153,8 @@ void File::close() {
     uCOSerr = OSMemPut(sdFileHeap, _file);
     if (uCOSerr != OS_ERR_NONE) while(1);
 
+    _file = 0;    // assign 0
+    
     /* for debugging file open/close leaks
     nfilecount--;
     Serial.print("Deleted ");
