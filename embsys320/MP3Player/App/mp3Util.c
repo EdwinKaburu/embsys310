@@ -2,9 +2,7 @@
 mp3Util.c
 Some utility functions for controlling the MP3 decoder.
 
-Developed for University of Washington embedded systems programming certificate
 
-2016/2 Nick Strathy wrote/arranged it
 */
 
 #include "bsp.h"
@@ -13,22 +11,21 @@ Developed for University of Washington embedded systems programming certificate
 
 void delay(uint32_t time);
 
-
 static File dataFile;
 
+// ------------------- MP3 Player Status Pointers -------------------
 extern BOOLEAN nextSong;
 extern BOOLEAN stopSong;
 extern BOOLEAN prevSong;
 
-//extern BOOLEAN SystemVolUp;
-
+// ------------------- Get Changed Volume -------------------
 extern INT8U DefVolume;
 
+// ------------------- Volume Update : Sent to Vs1053 (Adafruit Music Maker Shield) -------------------
 INT8U BspMp3SetVolCustom[4];
 
+// ---------------- Capture Default Volume Status Pointer ----------------------
 BOOLEAN resetVolume = OS_TRUE;
-//INT32U VolumeLength;
-
 
 static void Mp3StreamInit(HANDLE hMp3)
 {
@@ -40,31 +37,29 @@ static void Mp3StreamInit(HANDLE hMp3)
   // Reset the device
   length = BspMp3SoftResetLen;
   Write(hMp3, (void*)BspMp3SoftReset, &length);
-  
-  // Set volume
-  //length = BspMp3SetVol1010Len;
-  //Write(hMp3, (void*)BspMp3SetVol1010, &length);
-  
+ 
   // To allow streaming data, set the decoder mode to Play Mode
   length = BspMp3PlayModeLen;
   Write(hMp3, (void*)BspMp3PlayMode, &length);
   
-  
-  // Copy a Copy of BspMp3SetVol1010
-  
+  /*
+    Capture the Default Volume (BspMp3SetVol1010) and Place into our Custom One
+    BspMp3SetVolCustom - Changes Based on User Input
+  */
   if(resetVolume)
   {
+    // Copy All Entries
     for(INT8U loop = 0; loop < 4; loop++) {
     
     BspMp3SetVolCustom[loop] = BspMp3SetVol1010[loop];
     
      }
     
+    // Only Copy Once. To Avoid, Resetting Volume.
     resetVolume = OS_FALSE;
   }
   
-  
-  
+  // Length of Default Volume[]
   length = BspMp3SetVol1010Len;
   
   // Set Volume: Write Our Custom Volume
@@ -88,7 +83,9 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
   
   char printBuf[PRINTBUFMAX];
   
+  // Open File
   dataFile = SD.open(pFilename, O_READ);
+  
   if (!dataFile) 
   {
     PrintWithBuf(printBuf, PRINTBUFMAX, "Error: could not open SD card file '%s'\n", pFilename);
@@ -97,11 +94,13 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
   
   INT8U mp3Buf[MP3_DECODER_BUF_SIZE];
   INT32U iBufPos = 0;
-  // nextSong = OS_FALSE;
+ 
   while (dataFile.available())
   {
+    
     if(stopSong)
     {
+      // Repeatedly Delay. Check if StopSong Pointer Has Changed To False.
       OSTimeDly(300);
     }
     else
@@ -110,12 +109,13 @@ void Mp3StreamSDFile(HANDLE hMp3, char *pFilename)
       while (dataFile.available() && iBufPos < MP3_DECODER_BUF_SIZE)
       {
         mp3Buf[iBufPos] = dataFile.read();
-        //delay(30);
+        
         iBufPos++;
       }
       
       Write(hMp3, mp3Buf, &iBufPos);
-      //OSTimeDly(1);
+     
+      // Skip Song if NextSong or PrevSong are True
       if (nextSong)
       {
         break;
@@ -156,9 +156,6 @@ void Mp3Stream(HANDLE hMp3, INT8U *pBuf, INT32U bufLen)
   
   chunkLen = MP3_DECODER_BUF_SIZE;
   
-  
-  //stopSong = OS_FALSE;
-  
   while (!done)
   {
     
@@ -168,9 +165,7 @@ void Mp3Stream(HANDLE hMp3, INT8U *pBuf, INT32U bufLen)
       OSTimeDly(300);
     }
     else
-    {
-      //continue;
-      
+    {      
       // detect last chunk of pBuf
       if (bufLen - iBufPos < MP3_DECODER_BUF_SIZE)
       {
@@ -183,12 +178,19 @@ void Mp3Stream(HANDLE hMp3, INT8U *pBuf, INT32U bufLen)
       bufPos += chunkLen;
       iBufPos += chunkLen;
       
-      // if(stopSong)
-      // {
-      // break
-      // }
+      // Skip Song if NextSong or PrevSong are True
+      if (nextSong)
+      {
+        break;
+      }
       
-      //OSTimeDly(10);
+      if(prevSong)
+      {
+        break;
+      }
+      
+       // Don't Break when Halted, only during NextSong or PrevSong.
+      
     }
     
   }
@@ -243,37 +245,19 @@ PjdfErrCode Mp3GetRegister(HANDLE hMp3, INT8U *cmdInDataOut, INT32U bufLen)
 
 void Mp3VolumeUpDown(HANDLE hMp3)
 {
-  INT32U length;
-   // Write To Chip
+    INT32U length;
+    
+    // Write To Chip
     Ioctl(hMp3, PJDF_CTRL_MP3_SELECT_COMMAND, 0, 0);
-  
     
-    /*if(SystemVolUp )
-    {
-      // We can Increment the Volume
-      if(DefVolume != 0x00)
-      {
-        // Increase Volume
-         DefVolume =  DefVolume - 0x10;
-      }
-      
-    }
-    else
-    {
-      if(DefVolume < 0x90)
-      {
-         // Decrease Volume
-         DefVolume =  DefVolume + 0x10;
-      }
-    }
-    */
-    
+    // Modify The Volume
     BspMp3SetVolCustom[2] = DefVolume;
     BspMp3SetVolCustom[3] = DefVolume;
 
+    // Get the Length
     length = BspMp3SetVol1010Len;
     
-    // Write To vs 1053 Chip    
+    // Write To vs1053 Chip    
     Write(hMp3, (void*)BspMp3SetVolCustom, &length);
     
     // Switch Back to Select Data.

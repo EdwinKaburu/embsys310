@@ -6,6 +6,9 @@
     Developed for University of Washington embedded systems programming certificate
     
     2016/2 Nick Strathy wrote/arranged it
+    
+    2021/3 Edwin Kaburu wrote/update it
+
 */
 
 #include "stm32l4xx.h"
@@ -43,14 +46,10 @@ extern const INT8U BspMp3TestMode[];
 extern const INT8U BspMp3PlayMode[];
 extern const INT8U BspMp3SoftReset[];
 extern const INT8U BspMp3SetClockF[];
-extern const INT8U BspMp3SetVol1010[];
+extern const INT8U BspMp3SetVol1010[]; // Default Volume
 extern const INT8U BspMp3SetVol6060[];
 extern const INT8U BspMp3ReadVol[];
 
-//INT8U BspMp3SetVolCustom[];
-
-
-//extern const INT8U BspMp3ReadVol[];
 
 // Lengths of the above commands
 extern const INT8U BspMp3SineWaveLen;
@@ -59,24 +58,9 @@ extern const INT8U BspMp3TestModeLen;
 extern const INT8U BspMp3PlayModeLen;
 extern const INT8U BspMp3SoftResetLen;
 extern const INT8U BspMp3SetClockFLen;
-extern const INT8U BspMp3SetVol1010Len;
+extern const INT8U BspMp3SetVol1010Len; // Default Volume Length
 extern const INT8U BspMp3SetVol6060Len;
 extern const INT8U BspMp3ReadVolLen;
-
-//extern const INT8U VolumeLength;
-
-/*
-extern const INT8U BspMp3SetVol2020Len ;
-extern const INT8U BspMp3SetVol3030Len ;
-extern const INT8U BspMp3SetVol4040Len ;
-extern const INT8U BspMp3SetVol5050Len ;
-
-extern const INT8U BspMp3SetVol7070Len ;
-extern const INT8U BspMp3SetVol8080Len ;
-extern const INT8U BspMp3SetVol9090Len ;
-*/
-
-//extern const INT8U *VolumeSets[9][2];
 
 
 void BspMp3InitVS1053();

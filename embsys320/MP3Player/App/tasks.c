@@ -1,162 +1,126 @@
-/************************************************************************************
+/********************************************************
+ * AUTHOR : Edwin Kaburu
+ * FILE: tasks.c, tasks.h
+ * DATE: 2021/3 Edwin Kaburu adapted it for  
+ * MCU: STM-32L475VG, Arm Cortex M4
+ * PURPOSE/ Process: Implementation of UCOS II along with the defined tasks used 
+ * in the MP3 Music Player. StartUp Task Destroyed after creation. However it will
+ * create the application tasks (with priority ),other Inter-Process communication needed
+ *
+ * INPUT: Button Inputs from LCD, based on User Assertion
+ *
+ *
+ * OUTPUT: Prints on LCD (Adafruit 2.8" TFT Touch Shield v2). 
+ * Debugging(UART) on Tera Term (speed : 115200)
+ *
+ * ******************************************************/
 
-Copyright (c) 2001-2016  University of Washington Extension.
-
-Module Name:
-
-tasks.c
-
-Module Description:
-
-The tasks that are executed by the test application.
-
-2016/2 Nick Strathy adapted it for NUCLEO-F401RE 
-
-2020/2 Edwin Kaburu adapted it for  STM 32L475VG
-
-************************************************************************************/
 
 
+/*******************************************************************************
+ * Libraries , Directives, Constants
+ * ****************************************************************************/
+
+// ----------------------- Libraries -----------------------
 #include <stdarg.h>
-
 #include "bsp.h"
 #include "print.h"
 #include "mp3Util.h"
-
-// SD Card Library
 #include "SD.h"
-
 #include <Adafruit_GFX.h>    // Core graphics library
 #include <Adafruit_ILI9341.h>
 #include <Adafruit_FT6206.h>
+#include "train_crossing.h" // Non-SD Card
+
+// ----------------------- Directives -----------------------
+#define PENRADIUS 3
+#define BUFSIZE 256
+
+// ----------------------- Constants -----------------------
+// System is very Deterministic.
+// Enter in INT8U CAPACITY = (TOTAL NUMBER OF SONGS IN YOUR SD CARD)
+const INT8U CAPACITY = 5; // Should be modified to Numbers of Music Files you Have.
+const INT8U QUEUE_CAPACITY = 2;
+
+/*******************************************************************************
+
+Allocate the stacks for each task.
+The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
+
+*******************************************************************************/
+
+static OS_STK   LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static OS_STK   Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static OS_STK   ControlTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static OS_STK   DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE];
+static HANDLE hMp3; // Static Handler
+
+/*******************************************************************************
+ * Functions / Task Prototypes
+ * ****************************************************************************/
+
+// Function : LcdTouchTask()
+// Purpose : Assertion of User Touch Points / Buttons Clicks
+// Return : Void
+void LcdTouchTask(void* pdata); 
+
+// Function : ControlTask()
+// Purpose : Implementation of User Touch Points / Buttons Clicks. Determines Actions To Perfom
+// Return : Void
+void ControlTask(void* pdata);
+
+// Function : DisplayTask()
+// Purpose : Action is To Display Information Handed to the Task
+// Return : Void
+void DisplayTask(void* pdata); // UI Display
+
+// Function : Mp3SDTask()
+// Purpose : Action is To Play Music, based on Information handed To The Task from 
+// Return : Void
+void Mp3SDTask(void* pdata);
+
+// Function : MapTouchToScreen()
+// Purpose : Mapping of User Touch Points/Location. Used in LcdTouchTask() 
+// Return : mapped location
+long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+// Function : PrintToLcdWithBuf()
+// Purpose : Print Information Given . Debugging 
+// Return : void
+void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
+
+void *qMusicStatus[QUEUE_CAPACITY]; 
+
+/*******************************************************************************
+ * Others
+ * ****************************************************************************/
 
 Adafruit_ILI9341 lcdCtrl = Adafruit_ILI9341(); // The LCD controller
 
 Adafruit_FT6206 touchCtrl = Adafruit_FT6206(); // The touch controller
 
+// ----------------------- Buttons -----------------------
 
-Adafruit_GFX_Button playBottom;
+Adafruit_GFX_Button playButton;
+Adafruit_GFX_Button pauseButton;
+Adafruit_GFX_Button nextButton;
+Adafruit_GFX_Button previousButton;
+Adafruit_GFX_Button haltButton;
+Adafruit_GFX_Button VolIncButton;
+Adafruit_GFX_Button VolDesButton;
 
-Adafruit_GFX_Button pauseBottom;
+// ---------------------- OS Events  ----------------------
 
-Adafruit_GFX_Button nextBottom;
+// ---------------------- Mail Box ----------------------
+OS_EVENT * buttonMBox; // Get Button Clicked / Posted 
+OS_EVENT * mstatus_Change; // Display Current State of Music Status during interrupted state
+OS_EVENT * volume_Change; // Display Volume Change
+OS_EVENT *queueMusic; // Display Current Music and Status
 
-Adafruit_GFX_Button previousBottom;
-
-Adafruit_GFX_Button haltBottom;
-
-Adafruit_GFX_Button VolIncBottom;
-
-Adafruit_GFX_Button VolDesBottom;
-
-
-
-#define PENRADIUS 3
-
-long MapTouchToScreen(long x, long in_min, long in_max, long out_min, long out_max)
-{
-  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-#include "train_crossing.h"
-
-#define BUFSIZE 256
-
-// Music Previous Capacity
-// Should be modified to Total Numbers of Music Files you Have.
-const INT8U CAPACITY = 3;
-
-const INT8U QUEUE_CAPACITY = CAPACITY - 1;
-
-/************************************************************************************
-
-Allocate the stacks for each task.
-The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
-
-************************************************************************************/
-
-static OS_STK   LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE];
-static OS_STK   Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE];
-
-static OS_STK   ControlTaskStk[APP_CFG_TASK_START_STK_SIZE];
-
-static OS_STK   DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE];
-
-// ---------------- Task prototypes  -------------------------------------------
-void LcdTouchTask(void* pdata); // Change (LcdTouchDemoTask) to Touch Task, Assert of buttons
-
-void ControlTask(void* pdata); // Actions Taken By Buttons
-
-void DisplayTask(void* pdata); // UI Display
-
-// Include ---- Display Task ---- 
-
-void Mp3SDTask(void* pdata);
-
-
-// -----------------------------------------------------------------------------
-OS_EVENT *musicStatus;
-
-// Useful functions
-void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
-
-// Globals
-BOOLEAN nextSong = OS_FALSE;
-
-BOOLEAN stopSong = OS_TRUE;
-
-BOOLEAN prevSong = OS_FALSE;
-
-BOOLEAN haltPlayer = OS_TRUE; 
-
-// Inside ISR_M
-BOOLEAN isr_M = OS_FALSE;
-
-//BOOLEAN Read_Message = OS_FALSE;
-
-//  New Message To Read.
-BOOLEAN Read_Update = OS_FALSE;
-
-BOOLEAN Read_MailUpdate = OS_FALSE;
-
-BOOLEAN After_Start = OS_FALSE;
-
-BOOLEAN SystemVolUp = OS_FALSE;
-
-//BOOLEAN isr_items = OS_FALSE;
-
-// Event flags for synchronizing mailbox messages
-//OS_FLAG_GRP *btnFlags = 0;
-
-// Mutext
-OS_EVENT *pauseMutex;
-
-// Mail Box
-OS_EVENT * buttonMBox;
-
-// Mail Box
-//OS_EVENT * songDisplay;
-
-// Mail Box
-OS_EVENT * mstatus_Change; // Interrupted Music Status
-
-// Mail Box
-
-OS_EVENT * volume_Change; // Volume Change
-
-// Define Music Status
-void *qMusicStatus[QUEUE_CAPACITY];
-
-OS_EVENT *queueMusic;
-
-static HANDLE hMp3;
-
-//INT16U rdOnce;
-//char *prevLists[] = {"music1.mp3", "music2.mp3", "music3.mp3"};
-
-//char *prevSong[] = { "music1", "music2", "music3" };
-
-//char *prevmusic[CAPACITY];
-
+// Available Previous Files
 File prevFiles[CAPACITY];
 
 typedef enum
@@ -170,49 +134,55 @@ typedef enum
   HALT_COMMAND
 }ButtonControlsEnum;
 
+// ---------------------- Mp3 Status Pointers  ----------------------
+
 INT8U DefVolume =  0x00;
 
-//char volumeDigit[3];
+BOOLEAN nextSong = OS_FALSE;
+BOOLEAN stopSong = OS_TRUE;
+BOOLEAN prevSong = OS_FALSE;
+BOOLEAN haltPlayer = OS_TRUE; 
+BOOLEAN isr_M = OS_FALSE; // True, when current music is interrupt by next or previous click
+BOOLEAN Read_Update = OS_FALSE; 
+BOOLEAN Read_MailUpdate = OS_FALSE;
+BOOLEAN After_Start = OS_FALSE; // Need to Know, if we started streaming music
+BOOLEAN SystemVolUp = OS_FALSE; // Need to Know, if there is a volume Change
 
-/************************************************************************************
+/******************************************************************************/
 
+
+/*******************************************************************************
 This task is the initial task running, started by main(). It starts
 the system tick timer and creates all the other tasks. Then it deletes itself.
-
-************************************************************************************/
+*******************************************************************************/
 void StartupTask(void* pdata)
 {
-  // INT8U err;
-  
   char buf[BUFSIZE];
   
-  //INT8U err;
   PjdfErrCode pjdfErr;
   INT32U length;
   static HANDLE hSD = 0;
   static HANDLE hSPI = 0;
   
   PrintWithBuf(buf, BUFSIZE, "StartupTask: Begin\n");
-  // PrintWithBuf(buf, BUFSIZE, "StartupTask: Starting timer tick\n");
-  
+ 
   // Start the system tick
   SetSysTick(OS_TICKS_PER_SEC);
   
-  // ----------- Create Flags and Mutex -------------------------------
+  // ------------------ Create Queue and Mutex ------------------
   
-  // btnFlags = OSFlagCreate(0x0,&err);
-  
+  // Button Mail box, need to send to Control, the button asserted.
   buttonMBox = OSMboxCreate(NULL);
   
-  // songDisplay = OSMboxCreate(NULL);
-  
-  //music_Stats = OSMboxCreate(NULL);
-  
+  // Music Status Change, need to send to Display,something during Interrupted State
+  // Interrupted State - Pause , Halted assertion.
+  // Print To LCD
   mstatus_Change = OSMboxCreate(NULL);
   
+  // Volume Change, need send to Display, A volume Change to Print to LCD
   volume_Change = OSMboxCreate(NULL);
   
-  // Create Music Queue
+  // Current Music Status, Need to send To Display. A Queue, with Music name and status
   queueMusic = OSQCreate(qMusicStatus, QUEUE_CAPACITY);
   
   // Initialize SD card
@@ -242,22 +212,22 @@ void StartupTask(void* pdata)
   // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
   uint16_t task_prio =APP_TASK_TEST2_PRIO;
   
+  // ---------------------- Uncomment This below for Non-SD Card ---------------
+  
   // OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
+  // ---------------------------------------------------------------------------
+  
+  // ------------------------------ Task Creation ------------------------------
   OSTaskCreate(LcdTouchTask, (void*)0, &LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
   OSTaskCreate(Mp3SDTask, (void*)0, &Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
-  // Control Task Creation
   OSTaskCreate(ControlTask, (void*)0, &ControlTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
-  // DisplayTask Creation
   OSTaskCreate(DisplayTask, (void*)0, &DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
-  //pauseMutex = OSMutexCreate(task_prio++, &err);
-  
-  // Delete ourselves, letting the work be done in the new tasks.
-  //PrintWithBuf(buf, BUFSIZE, "StartupTask: deleting self\n");
+  // Delete Task 
   OSTaskDel(OS_PRIO_SELF);
 }
 
@@ -288,14 +258,11 @@ void DisplaySong(char* string, INT16S x, INT16S y, INT16S w, INT16S h)
   
   // allow slow lower pri drawing operation to finish without preemption
   OS_ENTER_CRITICAL(); 
-  
-  // X, Y, W, H, COLOR
-  //lcdCtrl.fillRect(0,40,120,20,ILI9341_NAVY);
-  
+    
   lcdCtrl.fillRect(x,y,w, h,ILI9341_NAVY);
   
   // Print a message on the LCD
-  lcdCtrl.setCursor(x, y); // This was 0, 40
+  lcdCtrl.setCursor(x, y); 
   lcdCtrl.setTextColor(ILI9341_WHITE);  
   lcdCtrl.setTextSize(2);
   PrintToLcdWithBuf(buf, BUFSIZE, string);
@@ -319,7 +286,6 @@ void Mp3SDTask(void* pdata)
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
   
-  // PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
   // Open handle to the MP3 decoder driver
   hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
   if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
@@ -338,102 +304,70 @@ void Mp3SDTask(void* pdata)
   // Send initialization data to the MP3 decoder and run a test
   PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
   Mp3Init(hMp3);
+  
   int count = 0;
-  
-  
+    
+  // We are Halted By Default
   char *music_status = "Halting";
   
-  
-  //Read_Message = OS_TRUE;
-  
-  //Read_Update = OS_TRUE;
-  
-  //Read_MailUpdate = OS_TRUE;
+  // Notify DisplayTask of Messsage Queue, need to be extracted
   Read_Update = OS_TRUE;
   
-  
-  // Insert Into Mail Box;
-  
-  // Add To Mail Box
-  //OSMboxPost(mstatus_Change,(void*)music_status);
-  
+  // "Halting" inserted for Name and Status To be Displayed  
   err = OSQPost(queueMusic, (void*)music_status); // Display Name
-  
   err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
   
-  // Add To Mail Box. HaltPlayer is Set To True
-  //OSMboxPost(mstatus_Change,(void*)music_status);
-  
-  //DrawBackGround();
-  
-  //OS_TIME()
   
   File dir = SD.open("/");
   
   while (1)
   {
-    // Reset Values
+    // Reset Values, before restarting 
     INT8U counter = 0u;
     
-    // ISR-M 
+    // ISR-M - Interrupted Music Files (Next, Previous Action)
+    
+    // Need To Reset The Pointers 
     INT8U at_counter = 0u; // After Counter
     INT8U lp_counter = 0u; // Looping Counter
     
-    //INT8U diff = 0;
-    
-    // Set Music Status To Playing
-    
+    // HaltPlayer must be False To Continue, to play Music Files, after
+    // Task Creation. 
     if(haltPlayer)
     {
       OSTimeDly(300);
     }
     else
     {
-      
+      // haltPlayer Set To False, after Reset. Variable used in Mp3Util
       After_Start = OS_TRUE;
-      // Loop To Play Song
       
+      // Loop To Play Song
       while (1)
       {
-        
-        //if(haltPlayer == OS_FALSE)
-        //{
-        
-        
         File entry;
         
+        // Default Music Status
         music_status = "Playing";
         
-        //char *test_name;
-        
         // Check if we are in isr_M, and run those files, else read from SD Card.
-        
         if(isr_M)
         { 
           
           if(prevSong)
           {
-            // Previous is True, Decrement LP_Counter;
-            
+            // Previous Button is True and asserted , Decrement LP_Counter;
             if(lp_counter != 0)
             {
               lp_counter--;
             }
             
-            
-            // Get File using Lp_Counter 
+            // Get File using the  Lp_Counter 
+            // Lp_Counter - Least Previous Counter
             entry = prevFiles[lp_counter];
-            
-            // test_name = prevmusic[lp_counter];
             
             // Play Song 
             PrintWithBuf(buf, BUFSIZE, "\nP-Begin streaming isr file: %d \n", lp_counter);       
-            
-            // PrintString(entry.name());
-            
-            //  Mp3StreamSDFile(hMp3, entry.name());           
-            
-            //  PrintWithBuf(buf, BUFSIZE, "\nP-Done streaming isr file  count=%d\n", ++count);     
             
             // Reset Previous Button
             prevSong = OS_FALSE;
@@ -445,9 +379,12 @@ void Mp3SDTask(void* pdata)
             {
               if(nextSong)
               {
-                // Reset Button
+                // Reset Next Button, if Asserted
                 nextSong = OS_FALSE;
               }
+              
+              // We need the lp_counter, and highest at_counter to be equal
+              // in order to exit isr_M and return to Reading from SD Card.
               
               if(lp_counter < at_counter)
               {
@@ -463,45 +400,32 @@ void Mp3SDTask(void* pdata)
               }
               else 
               {
+                // Both Pointers are Equal Need to Exit ISR_M
                 if(lp_counter == at_counter)
                 {
                   isr_M = OS_FALSE; // This will exit ISR_M
                 }
               }
-              
             }
-            
           }
-          
-          //PrintString(entry.name());
-          
-          //OSMboxPost(songDisplay,(void*)entry.name());
-          
-          // Add To Queue : For Display Purposes
-          //music_status
-          
-          //  Read_Message = OS_FALSE;
-          
+          // Notify DisplayTask of Messsage Queue, need to be extracted
           Read_Update = OS_TRUE;
           
-          err = OSQPost(queueMusic, (void*)entry.name()); // Display Name
+          // Display Name
+          err = OSQPost(queueMusic, (void*)entry.name()); 
+          // Display Music Status
+          err = OSQPost(queueMusic, (void*)music_status); 
           
-          err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
-          
-          
-         
-          
-          //PrintWithBuf(buf, BUFSIZE,"\n%d \n", err);
-          
+          // Stream a given File, based on Above Condition
           Mp3StreamSDFile(hMp3, entry.name());          
           
-          PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at: %d", lp_counter);
-         // DefVolume =  0x00;
-          continue;
+          PrintWithBuf(buf, BUFSIZE, "\nDone streaming isr file at LP: %d", lp_counter);
           
+          continue;
         }
         else
         {
+          // Get The Next File
           entry = dir.openNextFile();
           
           if (!entry)
@@ -514,79 +438,75 @@ void Mp3SDTask(void* pdata)
             continue;
           }
           
-          // Play Song 
+          // Play Song from SD Card
           PrintWithBuf(buf, BUFSIZE, "\nBegin streaming sd file  count=%d\n", ++count);    
           
-          // Send Song Name
-          //OSMboxPost(songDisplay,(void*)entry.name());
-          //songDisplay
-          
-          // PrintString(entry.name());
-          
-          
-          //Read_Message = OS_FALSE;
-          
+          // Notify DisplayTask of Messsage Queue, need to be extracted
           Read_Update = OS_TRUE;
           
-          err = OSQPost(queueMusic, (void*)entry.name()); // Display Name
-          
-          err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
+          // Display Name
+          err = OSQPost(queueMusic, (void*)entry.name()); 
+          // Display Music Status
+          err = OSQPost(queueMusic, (void*)music_status); 
          
-          
-          
+          // Stream a given File
           Mp3StreamSDFile(hMp3, entry.name()); 
           
           PrintWithBuf(buf, BUFSIZE, "\nDone streaming sd file  count=%d\n", ++count);    
           
-         // DefVolume =  0x00;
+          // Will Reset is Counter is Above Capacitor (CAPACITY)
+          // Capacity = 3 music files, counter = 0
+          // 0 mod 3 = 0, 1 mod 3 = 1, 
+          // 2 mod 3 = 2, 3 mod 3 = 0
           
-          //if(nextSong || prevSong)
-          // {        
-          counter = counter % CAPACITY; // Will Reset is Counter is Above Capacitor
+          // We are determining where (index) to save the File, so that we can go back(previous)
+          // and view them
+          counter = counter % CAPACITY; 
           
-          //prevmusic[counter] = entry.name();
-          
+          // Store this played / Interrupted File at prevFiles[]
           prevFiles[counter] = entry;
           
-          // Increment Counter, Something In Previous List 
+          // Increment Counter, There is something In Previous List . prevFiles[]
           counter++;
           
-          if(nextSong) // This was Next Button CLick
+          // This was Next Button CLick / Assertion
+          if(nextSong) 
           {
             // Reset Next_Song to False
+            // We already Saved The Files in to the prevFiles[]
             nextSong = OS_FALSE;
           }
+          
+          // If we are playing prevFiles, we are now in the isr_M.
+          // We only enter into it, during a Previous Button Click / Assertion.
           
           // Insert Ourself Into isr_M
           // This is our entry point of intersection 
           if(isr_M == OS_FALSE && counter > 0 && prevSong)
-          {  
+          { 
+            // Set isr_M Pointer
             isr_M = OS_TRUE;
             
-            // Set Up AC And LP
+            // Set Up At_counter  And LP_counter
+            // counter = 2, at_counter = 1, lp_counter  = 1.
+            // lp_counter will be decremented later on to 0.
+            
             at_counter = counter - 1 ;
             lp_counter = at_counter;
             
-            PrintWithBuf(buf, BUFSIZE, "\nInserted at_co: %d lp_co : %d\n", at_counter, lp_counter);  
+            // Debugging Display 
+            PrintWithBuf(buf, BUFSIZE, "\nInserted At_C: %d LP_C: %d\n", at_counter, lp_counter);  
             
-            //diff = lp_counter;
           }
           
           PrintWithBuf(buf, BUFSIZE, "FileSV =%d\n", counter);
-          
-          //}
         }
         
         entry.close();
         
-        
-        //}
-        
       }
       
-      
     }
-    
     
     dir.seek(0); // reset directory file to read again;
     
@@ -605,23 +525,16 @@ void ControlTask(void* pdata)
   char buf[BUFSIZE];
   ButtonControlsEnum *BtnControl_type;
   
-  
-
-  
   PrintWithBuf(buf, BUFSIZE,"Control Task building\n");
-  
-  //OS_CPU_SR  cpu_sr;
-  
-  //OS_ENTER_CRITICAL();
-  
   
   while(1)
   {
-    
+    // Get Which Button Was Clicked
     BtnControl_type = (ButtonControlsEnum*)OSMboxPend(buttonMBox,0,&err);
     
     ButtonControlsEnum* value = BtnControl_type;
     
+    // Display its Value: Debugging Display
     PrintWithBuf(buf, BUFSIZE,"Value: %d \t %d \n", value, (*value));
     
     char *music_status;
@@ -630,104 +543,110 @@ void ControlTask(void* pdata)
     
     INT8U displayVolume;
     
+    // Get The CPU Status
     OS_CPU_SR  cpu_sr;
+    
     switch((int)BtnControl_type)
     {
     case VOLUP_COMMAND:
-      //PrintString("None Command");
       
-      // De-Assert Volume
-      VolIncBottom.press(0);
+      // De-Assert VolumeBtn : Make The Button Available
+      VolIncButton.press(0);
       
-      // Increase Volume
+      // Set SystemVolUp Pointer To True.
       SystemVolUp = OS_TRUE;
       
+      // Highest Volume in our System is 0x00 (0), 100%
+      // Lowest Volume  is 0x64 (100), 0 %     
       if(DefVolume != 0x00)
       {
-        // Increase Volume
+         // Increase Volume by decrementing it to 0x00 or 0
          DefVolume =  DefVolume - 0xA; // subtract 10
          
+         // We need to set the volume, uninterrupted, otherwise it won't work
          OS_ENTER_CRITICAL();
          
+         // See mp3Util.c for its implementation
          Mp3VolumeUpDown(hMp3);
      
          OS_EXIT_CRITICAL();
       }
       
-      // Send To Display
-      
+      // Need to Display Updated Volume
       Read_Update = OS_TRUE;
-      
       Read_MailUpdate = OS_TRUE;
-      
-     // sprintf(volumeDigit,"%d",DefVolume);
-      
-      
-      //PrintWithBuf(buf, BUFSIZE,"\nVolume: %s\n", volumeDigit);
-      
-        // Display Volume
-      
+     
+      // Subtract DefVolume and from maximum a Hundred 
       displayVolume = 0x64 - DefVolume;
       
+      // Convert Digit To a String
       snprintf(volumeDigit,7,"%d %s", displayVolume, "%%");
       
+      // Post into the volume_Change Mailbox
       OSMboxPost(volume_Change, (void*) volumeDigit);
-            
+      
+      // Delay
       OSTimeDly(100);
       
       break;
     case VOLDW_COMMAND:
       
-      // De-Assert Volume
-      VolDesBottom.press(0);
+       // De-Assert VolumeBtn : Make The Button Available
+      VolDesButton.press(0);
       
-      // Decrese Volume
+      // Set SystemVolUp Pointer To True.
       SystemVolUp = OS_TRUE;
       
-      if(DefVolume < 0x64) // used to be 0x90
+      // Highest Volume in our System is 0x00 (0), 100%
+      // Lowest Volume  is 0x64 (100), 0 %     
+      
+      if(DefVolume < 0x64) 
       {
-         // Decrease Volume
+         // Decrease Volume, by increasing it to 0x64
          DefVolume =  DefVolume + 0xA; // Add 10
          
+         // We need to set the volume, uninterrupted, otherwise it won't work
          OS_ENTER_CRITICAL();
          
          Mp3VolumeUpDown(hMp3);
-      
+         
+         // See mp3Util.c for its implementation
          OS_EXIT_CRITICAL();
       }
       
+      // Need to Display Updated Volume
       Read_Update = OS_TRUE;
-      
       Read_MailUpdate = OS_TRUE;
       
-      // Display Volume
-      
+       // Subtract DefVolume and from maximum a Hundred 
       displayVolume = 0x64 - DefVolume;
       
+      // Convert Digit To a String
       snprintf(volumeDigit,7,"%d %s", displayVolume, "%%");
-      //PrintWithBuf(buf, BUFSIZE,"\nVolume: %s\n", volumeDigit);
-        
+      
+      // Post into the volume_Change Mailbox
       OSMboxPost(volume_Change, (void*) volumeDigit);
       
+      // Delay
       OSTimeDly(100);
       
       break;
     case PAUSE_COMMAND:
-      playBottom.press(0); stopSong = OS_TRUE;
+      // De-assert Play Button and setStop To True
+      playButton.press(0); stopSong = OS_TRUE;
       
-      //Read_Message = OS_TRUE;
-      
+      // Need to Display Updated Music Status
       Read_Update = OS_TRUE;
-      
       Read_MailUpdate = OS_TRUE;
       
       music_status = "Paused";
       // Add To Mail Box
       OSMboxPost(mstatus_Change,(void*)music_status);
+      
       break;
     case PLAY_COMMAND:
-      pauseBottom.press(0);  
-      haltBottom.press(0);
+      pauseButton.press(0);  
+      haltButton.press(0);
       
       haltPlayer = OS_FALSE;
       
@@ -749,23 +668,22 @@ void ControlTask(void* pdata)
       prevSong = OS_FALSE;  nextSong = OS_TRUE;
       
       // De-assert Button Pressed. 
-      nextBottom.press(0); 
+      nextButton.press(0); 
       
-      pauseBottom.press(0);
+      pauseButton.press(0);
       
       // Un-Pause Song if paused.
       // Condition will be taken care off by the Button Click Capture.
       // We are not un-Halting the entire music player, just the song.
       stopSong = OS_FALSE;
       
-      
       break;
     case PREVIOUS_COMMAND:
       
       prevSong = OS_TRUE; nextSong = OS_FALSE;
       
-      previousBottom.press(0); 
-      pauseBottom.press(0);
+      previousButton.press(0); 
+      pauseButton.press(0);
       
       // Un-Pause Song if paused.
       // Condition will be taken care off by the Button Click Capture.
@@ -775,15 +693,12 @@ void ControlTask(void* pdata)
       break;      
     default:
       // Set Halt Player  To True
-      
       haltPlayer = OS_TRUE;
       // Set Stop Song To True
       stopSong = OS_TRUE;
       
       // Release Play Button if Locked
-      playBottom.press(0);
-      
-     // Read_Message = OS_TRUE;
+      playButton.press(0);
       
       Read_Update = OS_TRUE;
       
@@ -796,10 +711,7 @@ void ControlTask(void* pdata)
       break;
     }
   }
-  
-  //OS_EXIT_CRITICAL();
-  //while (1) OSTimeDly(1000);
-  
+    
 }
 
 /*******************************************************************************
@@ -809,15 +721,11 @@ Runs Display Task Code
 *******************************************************************************/
 void DisplayTask(void* pdata)
 {
-  // Future reference: Song Status
-  
-  // Get Message Box Data
   
   INT8U err;
   
   INT16U rdOnce = 0; // Read Once
-  //char *displayData;
-  //char *displayStats;
+
   char *display_name;
   char *display_status;
   char *display_volume = "100 %%";
@@ -825,27 +733,20 @@ void DisplayTask(void* pdata)
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE,"Display Task building\n");
  
-  
   while(1)
   {
     if(Read_Update)
     {
       if(Read_MailUpdate)
       {
-        // Could be Halt Command or Pause Command or Stop Command or Begining of 
-        // Music Player
-        
+        // Message Display,could be Halt Command or Pause Command 
+        // or Stop Command.
         
         // Check for Volume Update
-        
         if(SystemVolUp )
         {
           // Capture Volume Data in MailBox
-          
-          display_volume = (char*)OSMboxPend(volume_Change,100,&err);
-          
-          //DisplaySong(display_volume, 0, 140, 100,20);
-          
+          display_volume = (char*)OSMboxPend(volume_Change,100,&err);      
         }
         else
         {
@@ -857,11 +758,11 @@ void DisplayTask(void* pdata)
       else
       {
         // Read From Queue 
-               
         display_name = (char*)OSQPend(queueMusic,0,&err);
         
         display_status = (char*)OSQPend(queueMusic,0,&err);
         
+        // rdOnce - Read Once To 0
         rdOnce = 0;
         
       }
@@ -869,9 +770,11 @@ void DisplayTask(void* pdata)
       // Display Values
       if(rdOnce == 0)
       {
+        // Only Display Once
         DisplaySong(display_name,0,40,150,20);
       }
       
+      // Display Updated Music Status
       DisplaySong(display_status,0,90,150,20);
      
       // Display Volume
@@ -902,9 +805,6 @@ void LcdTouchTask(void* pdata)
   PjdfErrCode pjdfErr;
   // INT8U err;
   INT32U length;
-  
-  
-  //ButtonControlsEnum BtnControl_type;
   
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE, "LcdTouchDemoTask: starting\n");
@@ -963,109 +863,106 @@ void LcdTouchTask(void* pdata)
   
   int currentcolor = ILI9341_RED;
   
-  //  Adafruit_GFX_Button pauseBottom
-  pauseBottom = Adafruit_GFX_Button(); 
+  //  Adafruit_GFX_Button pauseButton
+  pauseButton = Adafruit_GFX_Button(); 
   
-  // Adafruit_GFX_Button playBottom
-  playBottom  = Adafruit_GFX_Button();
+  // Adafruit_GFX_Button playButton
+  playButton  = Adafruit_GFX_Button();
   
-  // Adafruit_GFX_Button nextBottom
-  nextBottom = Adafruit_GFX_Button();
+  // Adafruit_GFX_Button nextButton
+  nextButton = Adafruit_GFX_Button();
   
-  // Adafruit_GFX_Button haltBottom
-  haltBottom = Adafruit_GFX_Button();
+  // Adafruit_GFX_Button haltButton
+  haltButton = Adafruit_GFX_Button();
   
-  // Adafruit_GFX_Button previousBottom
-  previousBottom = Adafruit_GFX_Button();
+  // Adafruit_GFX_Button previousButton
+  previousButton = Adafruit_GFX_Button();
   
-  // Adafruit_GFX_Bitton VolIncBottom
-  VolIncBottom = Adafruit_GFX_Button();
+  // Adafruit_GFX_Bitton VolIncButton
+  VolIncButton = Adafruit_GFX_Button();
   
-  // Adafruit_GFX_Bitton VolDesBottom
-  VolDesBottom = Adafruit_GFX_Button();
+  // Adafruit_GFX_Bitton VolDesButton
+  VolDesButton = Adafruit_GFX_Button();
   
-  pauseBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-30, // x, y center of button
+  pauseButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-30, // x, y center of button
                          60, 50, // width, height
                          ILI9341_YELLOW, // outline
                          ILI9341_BLACK, // fill
                          ILI9341_YELLOW, // text color
                          "Pause", // label
                          1); // text size
-  pauseBottom.drawButton(0);
+  pauseButton.drawButton(0);
   
   
   
-  playBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-100, ILI9341_TFTHEIGHT-30, // x, y center of button
+  playButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-100, ILI9341_TFTHEIGHT-30, // x, y center of button
                         60, 50, // width, height
                         ILI9341_YELLOW, // outline
                         ILI9341_BLACK, // fill
                         ILI9341_YELLOW, // text color
                         "Play", // label
                         1); // text size
-  playBottom.drawButton(0);
+  playButton.drawButton(0);
   
-  nextBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-30, // x, y center of button
+  nextButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-30, // x, y center of button
                         60, 50, // width, height
                         ILI9341_YELLOW, // outline
                         ILI9341_BLACK, // fill
                         ILI9341_YELLOW, // text color
                         "Next", // label
                         1); // text size
-  nextBottom.drawButton(0);
+  nextButton.drawButton(0);
   
-  previousBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-90, // x, y center of button
+  previousButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-170, ILI9341_TFTHEIGHT-90, // x, y center of button
                             60, 50, // width, height
                             ILI9341_YELLOW, // outline
                             ILI9341_BLACK, // fill
                             ILI9341_YELLOW, // text color
                             "Previous", // label
                             1); // text size
-  previousBottom.drawButton(0);
+  previousButton.drawButton(0);
   
   
-  haltBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-90, // x, y center of button
+  haltButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-90, // x, y center of button
                         60, 50, // width, height
                         ILI9341_YELLOW, // outline
                         ILI9341_BLACK, // fill
                         ILI9341_YELLOW, // text color
                         "Stop", // label
                         1); // text size
-  haltBottom.drawButton(0);
+  haltButton.drawButton(0);
   
-  VolIncBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-150, // x, y center of button
+  VolIncButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-150, // x, y center of button
                         60, 50, // width, height
                         ILI9341_YELLOW, // outline
                         ILI9341_BLACK, // fill
                         ILI9341_YELLOW, // text color
                         "Vol Up", // label
                         1); // text size
-  VolIncBottom.drawButton(0);
+  VolIncButton.drawButton(0);
   
   
-  VolDesBottom.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-210, // x, y center of button
+  VolDesButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-210, // x, y center of button
                         60, 50, // width, height
                         ILI9341_YELLOW, // outline
                         ILI9341_BLACK, // fill
                         ILI9341_YELLOW, // text color
                         "Vol Down", // label
                         1); // text size
-  VolDesBottom.drawButton(0);
-  
-  
-  //VolDesBottom
-  
+  VolDesButton.drawButton(0);
+    
   // By Default this will be 0 - False.
   // Meaning that is was Released
   
-  pauseBottom.press(0);
+  pauseButton.press(0);
   
-  playBottom.press(0);
+  playButton.press(0);
   
-  nextBottom.press(0);
+  nextButton.press(0);
   
-  previousBottom.press(0);
+  previousButton.press(0);
   
-  VolIncBottom.press(0);
+  VolIncButton.press(0);
   
   while (1) { 
     boolean touched;
@@ -1093,22 +990,20 @@ void LcdTouchTask(void* pdata)
     lcdCtrl.fillCircle(p.x, p.y, PENRADIUS, currentcolor);
     
     // Don't Accept Buttons when HaltPlayer is set To True, Apart from Play Button
-    if(pauseBottom.contains(p.x, p.y) && pauseBottom.isPressed() == 0 && !haltPlayer)
+    if(pauseButton.contains(p.x, p.y) && pauseButton.isPressed() == 0 && !haltPlayer)
     {
       
-      if(pauseBottom.justReleased() == 1 || pauseBottom.justPressed() == 0)
+      if(pauseButton.justReleased() == 1 || pauseButton.justPressed() == 0)
       {
         
         // Assert Pause Button
-        pauseBottom.press(1); 
+        pauseButton.press(1); 
         
-        if(pauseBottom.isPressed() == 1)
+        if(pauseButton.isPressed() == 1)
         {
           // Send Control Message to Mailbox
           
           PrintString("\nPause Asserted\n");
-          
-          // ButtonControlsEnum BtnControl_type1 = PAUSE_COMMAND ;
           
           OSMboxPost(buttonMBox,(void*)PAUSE_COMMAND);
           
@@ -1117,22 +1012,20 @@ void LcdTouchTask(void* pdata)
       } //OSTimeDly(100);
       
     }
-    else if(playBottom.contains(p.x, p.y) && playBottom.isPressed() == 0)
+    else if(playButton.contains(p.x, p.y) && playButton.isPressed() == 0)
     { 
       
-      if(playBottom.justReleased() == 1 || playBottom.justPressed() == 0)
+      if(playButton.justReleased() == 1 || playButton.justPressed() == 0)
       {
         // Assert Play Button
-        playBottom.press(1); 
+        playButton.press(1); 
         
         // Call Interrupt
-        if(playBottom.isPressed() == 1)
+        if(playButton.isPressed() == 1)
         {
           // Send Control Message to Mailbox
           
           PrintString("\nPlay Asserted\n");
-          
-          // ButtonControlsEnum BtnControl_type = PLAY_COMMAND ;
           
           OSMboxPost(buttonMBox,(void*)PLAY_COMMAND);
           
@@ -1140,37 +1033,34 @@ void LcdTouchTask(void* pdata)
       }
       
     }
-    else if (nextBottom.contains(p.x, p.y) && nextBottom.isPressed() == 0 && !haltPlayer)
+    else if (nextButton.contains(p.x, p.y) && nextButton.isPressed() == 0 && !haltPlayer)
     {
-      if(nextBottom.justReleased() == 1 || nextBottom.justPressed() == 0)
+      if(nextButton.justReleased() == 1 || nextButton.justPressed() == 0)
       {
         // Assert Next Button
-        nextBottom.press(1); 
+        nextButton.press(1); 
         
         // Call Interrupt
-        if(nextBottom.isPressed() == 1)
+        if(nextButton.isPressed() == 1)
         {
-          
           // Send Control Message to Mailbox
           
           PrintString("\nNext Asserted\n");
-          
-          // NEXT_COMMAND, PREVIOUS_COMMAND, previousBottom
           
           OSMboxPost(buttonMBox,(void*)NEXT_COMMAND);
           
         }
       }
     }
-    else if (previousBottom.contains(p.x, p.y) && previousBottom.isPressed() == 0 && !haltPlayer)
+    else if (previousButton.contains(p.x, p.y) && previousButton.isPressed() == 0 && !haltPlayer)
     {
-      if(previousBottom.justReleased() == 1 || previousBottom.justPressed() == 0)
+      if(previousButton.justReleased() == 1 || previousButton.justPressed() == 0)
       {
         // Assert Previous Button
-        previousBottom.press(1); 
+        previousButton.press(1); 
         
         // Call Interrupt
-        if(previousBottom.isPressed() == 1)
+        if(previousButton.isPressed() == 1)
         {
           // Send Control Message to Mailbox
           
@@ -1182,16 +1072,16 @@ void LcdTouchTask(void* pdata)
           
         }
       }
-    }//haltBottom
-    else if(haltBottom.contains(p.x, p.y) && haltBottom.isPressed() == 0 && !haltPlayer)
+    }//haltButton
+    else if(haltButton.contains(p.x, p.y) && haltButton.isPressed() == 0 && !haltPlayer)
     {
-      if(haltBottom.justReleased() == 1 || haltBottom.justPressed() == 0)
+      if(haltButton.justReleased() == 1 || haltButton.justPressed() == 0)
       {
         // Assert Halt Button
-        haltBottom.press(1);
+        haltButton.press(1);
         
         // Send Button Clicked to Control Task
-        if(haltBottom.isPressed() == 1)
+        if(haltButton.isPressed() == 1)
         {
           PrintString("\nHalt Asserted\n");
           
@@ -1199,15 +1089,15 @@ void LcdTouchTask(void* pdata)
         }
       }
     }
-    else if(VolIncBottom.contains(p.x, p.y) && VolIncBottom.isPressed() == 0 && !haltPlayer)
+    else if(VolIncButton.contains(p.x, p.y) && VolIncButton.isPressed() == 0 && !haltPlayer)
     {
-      if(VolIncBottom.justReleased() == 1 || VolIncBottom.justPressed() == 0)
+      if(VolIncButton.justReleased() == 1 || VolIncButton.justPressed() == 0)
       {
         // Assert Vol Up Button
-        VolIncBottom.press(1);
+        VolIncButton.press(1);
         
         // Send Button Clicked to Control Task
-        if(VolIncBottom.isPressed() == 1)
+        if(VolIncButton.isPressed() == 1)
         {
           PrintString("\nIncrease Volume \n");
           
@@ -1215,15 +1105,15 @@ void LcdTouchTask(void* pdata)
         }
       }
     }
-    else if(VolDesBottom.contains(p.x, p.y) && VolDesBottom.isPressed() == 0 && !haltPlayer)
+    else if(VolDesButton.contains(p.x, p.y) && VolDesButton.isPressed() == 0 && !haltPlayer)
     {
-      if(VolDesBottom.justReleased() == 1 || VolDesBottom.justPressed() == 0)
+      if(VolDesButton.justReleased() == 1 || VolDesButton.justPressed() == 0)
       {
         // Assert Vol Down Button
-        VolDesBottom.press(1);
+        VolDesButton.press(1);
         
         // Send Button Clicked to Control Task
-        if(VolDesBottom.isPressed() == 1)
+        if(VolDesButton.isPressed() == 1)
         {
           PrintString("\nDecrease Volume \n");
           
