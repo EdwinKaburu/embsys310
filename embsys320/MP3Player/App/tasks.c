@@ -1,25 +1,25 @@
 /********************************************************
- * AUTHOR : Edwin Kaburu
- * FILE: tasks.c, tasks.h
- * DATE: 2021/3 Edwin Kaburu adapted it for  
- * MCU: STM-32L475VG, Arm Cortex M4
- * PURPOSE/ Process: Implementation of UCOS II along with the defined tasks used 
- * in the MP3 Music Player. StartUp Task Destroyed after creation. However it will
- * create the application tasks (with priority ),other Inter-Process communication needed
- *
- * INPUT: Button Inputs from LCD, based on User Assertion
- *
- *
- * OUTPUT: Prints on LCD (Adafruit 2.8" TFT Touch Shield v2). 
- * Debugging(UART) on Tera Term (speed : 115200)
- *
- * ******************************************************/
+* AUTHOR : Edwin Kaburu
+* FILE: tasks.c, tasks.h
+* DATE: 2021/3 Edwin Kaburu adapted it for  
+* MCU: STM-32L475VG, Arm Cortex M4
+* PURPOSE/ Process: Implementation of UCOS II along with the defined tasks used 
+* in the MP3 Music Player. StartUp Task Destroyed after creation. However it will
+* create the application tasks (with priority ),other Inter-Process communication needed
+*
+* INPUT: Button Inputs from LCD, based on User Assertion
+*
+*
+* OUTPUT: Prints on LCD (Adafruit 2.8" TFT Touch Shield v2). 
+* Debugging(UART) on Tera Term (speed : 115200)
+*
+* ******************************************************/
 
 
 
 /*******************************************************************************
- * Libraries , Directives, Constants
- * ****************************************************************************/
+* Libraries , Directives, Constants
+* ****************************************************************************/
 
 // ----------------------- Libraries -----------------------
 #include <stdarg.h>
@@ -39,6 +39,7 @@
 // ----------------------- Constants -----------------------
 // System is very Deterministic.
 // Enter in INT8U CAPACITY = (TOTAL NUMBER OF SONGS IN YOUR SD CARD)
+
 const INT8U CAPACITY = 5; // Should be modified to Numbers of Music Files you Have.
 const INT8U QUEUE_CAPACITY = 2;
 
@@ -53,11 +54,16 @@ static OS_STK   LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   ControlTaskStk[APP_CFG_TASK_START_STK_SIZE];
 static OS_STK   DisplayTaskStk[APP_CFG_TASK_START_STK_SIZE];
+
+/* TODO NO-SD CARD
+static OS_STK   Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE];
+*/
+
 static HANDLE hMp3; // Static Handler
 
 /*******************************************************************************
- * Functions / Task Prototypes
- * ****************************************************************************/
+* Functions / Task Prototypes
+* ****************************************************************************/
 
 // Function : LcdTouchTask()
 // Purpose : Assertion of User Touch Points / Buttons Clicks
@@ -94,9 +100,13 @@ void PrintToLcdWithBuf(char *buf, int size, char *format, ...);
 
 void *qMusicStatus[QUEUE_CAPACITY]; 
 
+/* TODO NO-SD CARD
+void Mp3DemoTask(void* pdata);
+*/
+
 /*******************************************************************************
- * Others
- * ****************************************************************************/
+* Others
+* ****************************************************************************/
 
 Adafruit_ILI9341 lcdCtrl = Adafruit_ILI9341(); // The LCD controller
 
@@ -165,7 +175,7 @@ void StartupTask(void* pdata)
   static HANDLE hSPI = 0;
   
   PrintWithBuf(buf, BUFSIZE, "StartupTask: Begin\n");
- 
+  
   // Start the system tick
   SetSysTick(OS_TICKS_PER_SEC);
   
@@ -212,14 +222,14 @@ void StartupTask(void* pdata)
   // The maximum number of tasks the application can have is defined by OS_MAX_TASKS in os_cfg.h
   uint16_t task_prio =APP_TASK_TEST2_PRIO;
   
-  // ---------------------- Uncomment This below for Non-SD Card ---------------
   
-  // OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
-  
-  // ---------------------------------------------------------------------------
   
   // ------------------------------ Task Creation ------------------------------
   OSTaskCreate(LcdTouchTask, (void*)0, &LcdTouchTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
+  
+  /* TODO NO-SD CARD
+  OSTaskCreate(Mp3DemoTask, (void*)0, &Mp3DemoTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
+  */
   
   OSTaskCreate(Mp3SDTask, (void*)0, &Mp3SDTaskStk[APP_CFG_TASK_START_STK_SIZE-1], task_prio++);
   
@@ -258,7 +268,7 @@ void DisplaySong(char* string, INT16S x, INT16S y, INT16S w, INT16S h)
   
   // allow slow lower pri drawing operation to finish without preemption
   OS_ENTER_CRITICAL(); 
-    
+  
   lcdCtrl.fillRect(x,y,w, h,ILI9341_NAVY);
   
   // Print a message on the LCD
@@ -306,7 +316,7 @@ void Mp3SDTask(void* pdata)
   Mp3Init(hMp3);
   
   int count = 0;
-    
+  
   // We are Halted By Default
   char *music_status = "Halting";
   
@@ -448,7 +458,7 @@ void Mp3SDTask(void* pdata)
           err = OSQPost(queueMusic, (void*)entry.name()); 
           // Display Music Status
           err = OSQPost(queueMusic, (void*)music_status); 
-         
+          
           // Stream a given File
           Mp3StreamSDFile(hMp3, entry.name()); 
           
@@ -560,22 +570,22 @@ void ControlTask(void* pdata)
       // Lowest Volume  is 0x64 (100), 0 %     
       if(DefVolume != 0x00)
       {
-         // Increase Volume by decrementing it to 0x00 or 0
-         DefVolume =  DefVolume - 0xA; // subtract 10
-         
-         // We need to set the volume, uninterrupted, otherwise it won't work
-         OS_ENTER_CRITICAL();
-         
-         // See mp3Util.c for its implementation
-         Mp3VolumeUpDown(hMp3);
-     
-         OS_EXIT_CRITICAL();
+        // Increase Volume by decrementing it to 0x00 or 0
+        DefVolume =  DefVolume - 0xA; // subtract 10
+        
+        // We need to set the volume, uninterrupted, otherwise it won't work
+        OS_ENTER_CRITICAL();
+        
+        // See mp3Util.c for its implementation
+        Mp3VolumeUpDown(hMp3);
+        
+        OS_EXIT_CRITICAL();
       }
       
       // Need to Display Updated Volume
       Read_Update = OS_TRUE;
       Read_MailUpdate = OS_TRUE;
-     
+      
       // Subtract DefVolume and from maximum a Hundred 
       displayVolume = 0x64 - DefVolume;
       
@@ -591,7 +601,7 @@ void ControlTask(void* pdata)
       break;
     case VOLDW_COMMAND:
       
-       // De-Assert VolumeBtn : Make The Button Available
+      // De-Assert VolumeBtn : Make The Button Available
       VolDesButton.press(0);
       
       // Set SystemVolUp Pointer To True.
@@ -602,23 +612,23 @@ void ControlTask(void* pdata)
       
       if(DefVolume < 0x64) 
       {
-         // Decrease Volume, by increasing it to 0x64
-         DefVolume =  DefVolume + 0xA; // Add 10
-         
-         // We need to set the volume, uninterrupted, otherwise it won't work
-         OS_ENTER_CRITICAL();
-         
-         Mp3VolumeUpDown(hMp3);
-         
-         // See mp3Util.c for its implementation
-         OS_EXIT_CRITICAL();
+        // Decrease Volume, by increasing it to 0x64
+        DefVolume =  DefVolume + 0xA; // Add 10
+        
+        // We need to set the volume, uninterrupted, otherwise it won't work
+        OS_ENTER_CRITICAL();
+        
+        Mp3VolumeUpDown(hMp3);
+        
+        // See mp3Util.c for its implementation
+        OS_EXIT_CRITICAL();
       }
       
       // Need to Display Updated Volume
       Read_Update = OS_TRUE;
       Read_MailUpdate = OS_TRUE;
       
-       // Subtract DefVolume and from maximum a Hundred 
+      // Subtract DefVolume and from maximum a Hundred 
       displayVolume = 0x64 - DefVolume;
       
       // Convert Digit To a String
@@ -655,14 +665,14 @@ void ControlTask(void* pdata)
       if(After_Start)
       {
         Read_Update = OS_TRUE;
-      
-      Read_MailUpdate = OS_TRUE;
-      
-      music_status = "Playing";
-      // Add To Mail Box
-      OSMboxPost(mstatus_Change,(void*)music_status);
+        
+        Read_MailUpdate = OS_TRUE;
+        
+        music_status = "Playing";
+        // Add To Mail Box
+        OSMboxPost(mstatus_Change,(void*)music_status);
       }
-     
+      
       break;
     case NEXT_COMMAND:
       prevSong = OS_FALSE;  nextSong = OS_TRUE;
@@ -689,7 +699,7 @@ void ControlTask(void* pdata)
       // Condition will be taken care off by the Button Click Capture.
       // We are not un-Halting the entire music player, just the song.
       stopSong = OS_FALSE;
-            
+      
       break;      
     default:
       // Set Halt Player  To True
@@ -711,7 +721,7 @@ void ControlTask(void* pdata)
       break;
     }
   }
-    
+  
 }
 
 /*******************************************************************************
@@ -725,14 +735,14 @@ void DisplayTask(void* pdata)
   INT8U err;
   
   INT16U rdOnce = 0; // Read Once
-
+  
   char *display_name;
   char *display_status;
   char *display_volume = "100 %%";
   
   char buf[BUFSIZE];
   PrintWithBuf(buf, BUFSIZE,"Display Task building\n");
- 
+  
   while(1)
   {
     if(Read_Update)
@@ -750,10 +760,10 @@ void DisplayTask(void* pdata)
         }
         else
         {
-           // Read from Mail Box
-           display_status = (char*)OSMboxPend(mstatus_Change,100,&err);
+          // Read from Mail Box
+          display_status = (char*)OSMboxPend(mstatus_Change,100,&err);
         }
-                
+        
       }
       else
       {
@@ -776,7 +786,7 @@ void DisplayTask(void* pdata)
       
       // Display Updated Music Status
       DisplaySong(display_status,0,90,150,20);
-     
+      
       // Display Volume
       DisplaySong(display_volume, 0, 140, 100,20);
       
@@ -788,9 +798,9 @@ void DisplayTask(void* pdata)
       SystemVolUp = OS_FALSE;
       
     }
-  
-     OSTimeDly(100);
-  
+    
+    OSTimeDly(100);
+    
   }
   
 }
@@ -861,7 +871,7 @@ void LcdTouchTask(void* pdata)
     while (1);
   }
   
-  int currentcolor = ILI9341_RED;
+  int currentcolor = ILI9341_GREEN;
   
   //  Adafruit_GFX_Button pauseButton
   pauseButton = Adafruit_GFX_Button(); 
@@ -933,24 +943,24 @@ void LcdTouchTask(void* pdata)
   haltButton.drawButton(0);
   
   VolIncButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-150, // x, y center of button
-                        60, 50, // width, height
-                        ILI9341_YELLOW, // outline
-                        ILI9341_BLACK, // fill
-                        ILI9341_YELLOW, // text color
-                        "Vol Up", // label
-                        1); // text size
+                          60, 50, // width, height
+                          ILI9341_YELLOW, // outline
+                          ILI9341_BLACK, // fill
+                          ILI9341_YELLOW, // text color
+                          "Vol Up", // label
+                          1); // text size
   VolIncButton.drawButton(0);
   
   
   VolDesButton.initButton(&lcdCtrl, ILI9341_TFTWIDTH-30, ILI9341_TFTHEIGHT-210, // x, y center of button
-                        60, 50, // width, height
-                        ILI9341_YELLOW, // outline
-                        ILI9341_BLACK, // fill
-                        ILI9341_YELLOW, // text color
-                        "Vol Down", // label
-                        1); // text size
+                          60, 50, // width, height
+                          ILI9341_YELLOW, // outline
+                          ILI9341_BLACK, // fill
+                          ILI9341_YELLOW, // text color
+                          "Vol Down", // label
+                          1); // text size
   VolDesButton.drawButton(0);
-    
+  
   // By Default this will be 0 - False.
   // Meaning that is was Released
   
@@ -1133,48 +1143,73 @@ void LcdTouchTask(void* pdata)
 Runs MP3 demo code
 
 ************************************************************************************/
-/*void Mp3DemoTask(void* pdata)
+
+/* TODO NO-SD CARD
+void Mp3DemoTask(void* pdata)
 {
-PjdfErrCode pjdfErr;
-INT32U length;
-
-char buf[BUFSIZE];
-PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
-
-PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
-// Open handle to the MP3 decoder driver
-HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
-if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
-
-PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
-// We talk to the MP3 decoder over a SPI interface therefore
-// open an instance of that SPI driver and pass the handle to 
-// the MP3 driver.
-HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
-if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
-
-length = sizeof(HANDLE);
-pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
-if(PJDF_IS_ERROR(pjdfErr)) while(1);
-
-// Send initialization data to the MP3 decoder and run a test
-PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
-Mp3Init(hMp3);
-int count = 0;
-
-while (1)
-{
-OSTimeDly(500);
-
-//if(stopSong == OS_FALSE)
-// {
-PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
-Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
-PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
-// }
-
+  PjdfErrCode pjdfErr;
+  INT32U length;
+  INT8U err;
+  
+  char buf[BUFSIZE];
+  PrintWithBuf(buf, BUFSIZE, "Mp3DemoTask: starting\n");
+  
+  PrintWithBuf(buf, BUFSIZE, "Opening MP3 driver: %s\n", PJDF_DEVICE_ID_MP3_VS1053);
+  // Open handle to the MP3 decoder driver
+  HANDLE hMp3 = Open(PJDF_DEVICE_ID_MP3_VS1053, 0);
+  if (!PJDF_IS_VALID_HANDLE(hMp3)) while(1);
+  
+  PrintWithBuf(buf, BUFSIZE, "Opening MP3 SPI driver: %s\n", MP3_SPI_DEVICE_ID);
+  // We talk to the MP3 decoder over a SPI interface therefore
+  // open an instance of that SPI driver and pass the handle to 
+  // the MP3 driver.
+  HANDLE hSPI = Open(MP3_SPI_DEVICE_ID, 0);
+  if (!PJDF_IS_VALID_HANDLE(hSPI)) while(1);
+  
+  length = sizeof(HANDLE);
+  pjdfErr = Ioctl(hMp3, PJDF_CTRL_MP3_SET_SPI_HANDLE, &hSPI, &length);
+  if(PJDF_IS_ERROR(pjdfErr)) while(1);
+  
+  // Send initialization data to the MP3 decoder and run a test
+  PrintWithBuf(buf, BUFSIZE, "Starting MP3 device test\n");
+  Mp3Init(hMp3);
+  int count = 0;
+  
+  // We are Halted By Default
+  char *music_status = "Halting";
+  
+  // Notify DisplayTask of Messsage Queue, need to be extracted
+  Read_Update = OS_TRUE;
+  
+  // "Halting" inserted for Name and Status To be Displayed  
+  err = OSQPost(queueMusic, (void*)music_status); // Display Name
+  err = OSQPost(queueMusic, (void*)music_status); // Display Music Status
+  
+  while (1)
+  {
+    
+    if(haltPlayer)
+    {
+      OSTimeDly(300);
+    }
+    else
+    {
+      PrintWithBuf(buf, BUFSIZE, "Begin streaming sound file  count=%d\n", ++count);
+      music_status = "Playing";
+      
+      Read_Update = OS_TRUE;
+      err = OSQPost(queueMusic, (void*)"Train.Mp3"); // Display Name
+      err = OSQPost(queueMusic, (void*) music_status ); // Display Music Status
+      
+     
+      Mp3Stream(hMp3, (INT8U*)Train_Crossing, sizeof(Train_Crossing)); 
+      PrintWithBuf(buf, BUFSIZE, "Done streaming sound file  count=%d\n", count);
+    }
+    
+    OSTimeDly(100);
   }
 }
+
 */
 
 // Renders a character at the current cursor position on the LCD

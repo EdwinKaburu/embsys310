@@ -162,7 +162,7 @@ void Mp3Stream(HANDLE hMp3, INT8U *pBuf, INT32U bufLen)
     //Pause The Music
     if(stopSong)
     {      
-      OSTimeDly(300);
+      OSTimeDly(100);
     }
     else
     {      
