@@ -59,8 +59,8 @@ uint8_t m_max_amount;
 
 uint32_t m_grade;
 
-FuelTank &m_currTank;
-FuelGrade &m_currGrade;
+FuelTank  &m_currTank;
+FuelGrade  *m_currGrade;
 
 enum{
 	ACTIVE_TIME_OUT = 20000,

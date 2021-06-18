@@ -34,7 +34,7 @@ FuelPump::FuelPump() :
 		Active((QStateHandler) &FuelPump::InitialPseudoState, FUEL_PUMP,
 				"FUEL_PUMP"), m_price(0.00f), m_gallons(0.00f), m_max_amount(0), m_payment(
 				0), m_paid(false), m_graded(false), m_isbtn(false), m_grade(0),
-				m_currTank(NULL),m_currGrade(NULL),
+				m_currTank(MAIN_TANK),m_currGrade(NULL),
 				m_timeoutTimer(GetHsm().GetHsmn(), TIME_OUT_TIMER),
 				m_pumpTimer(GetHsm().GetHsmn(), PUMP_TIMER) {
 	SET_EVT_NAME(FUEL_PUMP);
@@ -293,7 +293,7 @@ QState FuelPump::IdleDrawing(FuelPump *const me, QEvt const *const e) {
 		} else {
 			snprintf(buf, sizeof(buf), "Credit");
 			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 10, 150,
-			COLOR24_BLACK, COLOR24_WHITE, 3);
+			COLOR24_BLACK, COLOR24_WHITE, 2);
 
 			Fw::Post(evt);
 		}
@@ -382,6 +382,7 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 		EVENT(e);
 		FuelPumpGradeReq const &req = static_cast<FuelPumpGradeReq const&>(*e);
 
+
 		FuelGrade *grade = me->m_currTank.GetFuelGradeG((Grade)req.GetGradeType());
 
 		if(grade)
@@ -389,10 +390,6 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 			me->m_currGrade = grade;
 			me->m_grade = req.GetGradeType();
 			me->m_graded = true;
-
-
-			//me->m_graded = true;
-			//me->m_grade = req.GetGradeIndex();
 
 			Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(), req.GetSeq(),
 					ERROR_SUCCESS);
@@ -407,7 +404,8 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 		}
 		else
 		{
-			 Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(), req.GetSeq(), ERROR_PARAM, GET_HSMN(), GPIO_OUT_REASON_INVALID_PATTERN);
+			 Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
+					 req.GetSeq(), ERROR_PARAM, GET_HSMN(), FUEL_PUMP_REASON_INVALID_GRADE);
 			 Fw::Post(evt);
 			 return Q_HANDLED();
 		}
@@ -431,7 +429,7 @@ QState FuelPump::Drawing(FuelPump *const me, QEvt const *const e) {
 
 		char buf[30];
 
-		snprintf(buf, sizeof(buf), "Grade = %d", me->m_grade);
+		snprintf(buf, sizeof(buf), "Grade = %lu", me->m_grade);
 
 		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 10, 210,
 		COLOR24_BLUE, COLOR24_GREEN, 2);
@@ -518,8 +516,8 @@ QState FuelPump::Filling(FuelPump *const me, QEvt const *const e) {
 		if (me->m_isbtn == false ) {
 			if (me->m_price <= me->m_max_amount) {
 
-				me->m_gallons += 0.10;
-				me->m_price += 0.20;
+				me->m_gallons += me->m_currTank.GetGallonsRate();
+				me->m_price += me->m_currGrade->GetPriceRate();
 
 				// ----------- MDRAW EVENT -----------
 				Evt *evt = new Evt(FUDRAW, GET_HSMN());

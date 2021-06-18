@@ -86,6 +86,7 @@ static CmdStatus Grade(Console &console, Evt const *e) {
 			Fw::Post(evt);
 
 		}
+
 		return CMD_DONE;
 	}
 	case FUEL_PUMP_GRADE_CFM: {
@@ -93,7 +94,6 @@ static CmdStatus Grade(Console &console, Evt const *e) {
 		console.PrintErrorEvt(&cfm);
 		return CMD_DONE;
 	}
-
 
 	}
 
@@ -103,8 +103,9 @@ static CmdStatus Grade(Console &console, Evt const *e) {
 static CmdStatus List(Console &console, Evt const *e);
 
 static CmdHandler const cmdHandler[] = { { "test", Test, "Test Function", 0 }, {
-		"pay", Pay, "Makes Payment", 0 }, { "grade", Grade, "Select Fuel Grade",
-		0 }, { "?", List, "List Commands", 0 }, };
+		"pay", Pay, "Makes Payment", 0 }, { "grade", Grade,
+		"Select Fuel Grade 87, 89, 91, 93", 0 },
+		{ "?", List, "List Commands", 0 }, };
 
 static CmdStatus List(Console &console, Evt const *e) {
 	return console.ListCmd(e, cmdHandler, ARRAY_COUNT(cmdHandler));

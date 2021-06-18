@@ -9,16 +9,16 @@
 
 namespace APP {
 
-// Default Main Tank Grades and Levels/Capacities.
+// Default Main Tank with Grades along with Levels/Capacities/Rates.
 
-FuelTank Main_Tank = {
+FuelTank MAIN_TANK = {
 		{
-				{ 250, GRADE_87 },
-				{ 250, GRADE_89 },
-				{ 250, GRADE_91 },
-				{ 250, GRADE_93 }
-		}
+				{ 250, GRADE_87, 0.25 },
+				{ 250, GRADE_89, 0.35 },
+				{ 250, GRADE_91, 0.45 },
+				{ 250, GRADE_93, 0.55 }
+		},
+		1000, 0.10
 };
-
 
 }

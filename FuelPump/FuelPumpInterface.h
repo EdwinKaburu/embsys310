@@ -37,6 +37,7 @@ enum {
 
 enum {
 	FUEL_PUMP_REASON_UNSPEC = 0,
+	FUEL_PUMP_REASON_INVALID_GRADE,
 };
 
 class FuelPumpStartReq: public Evt {
@@ -117,7 +118,7 @@ public:
 		TIMEOUT_MS = 100,
 	};
 
-	FuelPumpGradeReq(Hsmn to, Hsmn from, Sequence seq = 0, uint32_t type = 87) :
+	FuelPumpGradeReq(Hsmn to, Hsmn from, Sequence seq, uint32_t type = 87) :
 			Evt(FUEL_PUMP_GRADE_REQ, to, from, seq), m_greadeIndex(type) {
 	}
 	uint32_t GetGradeType() const { return m_greadeIndex; }
