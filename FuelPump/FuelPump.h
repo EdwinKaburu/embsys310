@@ -37,7 +37,7 @@ protected:
 	           static QState IdleDrawing(FuelPump * const me, QEvt const * const e);
 	           static QState Passive(FuelPump * const me, QEvt const * const e);
 	              static QState Waiting(FuelPump * const me, QEvt const * const e);
-	              static QState Drawing(FuelPump * const me, QEvt const * const e);
+	              static QState WaitingDraw(FuelPump * const me, QEvt const * const e);
 	              static QState Pumping(FuelPump * const me, QEvt const * const e);
 	                 static QState Filling(FuelPump * const me, QEvt const * const e);
 	                 static QState ReDrawing(FuelPump * const me, QEvt const * const e);
@@ -65,6 +65,11 @@ uint32_t m_grade;
 
 FuelTank  &m_currTank;
 FuelGrade  *m_currGrade;
+
+
+
+void InitDraw(FuelPump *const me);
+void WaitDraw(FuelPump *const me);
 
 enum{
 	ACTIVE_TIME_OUT = 20000,

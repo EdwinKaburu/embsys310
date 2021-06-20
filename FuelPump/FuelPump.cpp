@@ -209,6 +209,7 @@ QState FuelPump::Stopping(FuelPump *const me, QEvt const *const e) {
 }
 
 QState FuelPump::Started(FuelPump *const me, QEvt const *const e) {
+	EVENT(e);
 	switch (e->sig) {
 
 	case Q_ENTRY_SIG: {
@@ -232,6 +233,7 @@ QState FuelPump::Started(FuelPump *const me, QEvt const *const e) {
 }
 
 QState FuelPump::Idle(FuelPump *const me, QEvt const *const e) {
+
 	switch (e->sig) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
@@ -274,127 +276,8 @@ QState FuelPump::IdleDrawing(FuelPump *const me, QEvt const *const e) {
 		EVENT(e);
 
 		me->m_exit = false;
-		Evt *evt = new DispDrawBeginReq(ILI9341, GET_HSMN(), GEN_SEQ());
-		Fw::Post(evt);
 
-		// -------------- Main Rectangle ----------
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 0, 240, 320,
-		COLOR24_BLACK);
-		Fw::Post(evt);
-
-		char buf[30];
-
-		// Price
-
-		snprintf(buf, sizeof(buf), "Price = ");
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 10,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-		Fw::Post(evt);
-
-		snprintf(buf, sizeof(buf), "%.2f", me->m_price);
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 130, 10,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-		Fw::Post(evt);
-
-		// -------------- Gallons -----------------
-
-		snprintf(buf, sizeof(buf), "Gallons = ");
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 50,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-
-		Fw::Post(evt);
-
-		snprintf(buf, sizeof(buf), "%.2f", me->m_gallons);
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 130, 50,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-
-		Fw::Post(evt);
-
-		// Payment Type
-		if (me->m_payment == 0) {
-
-			snprintf(buf, sizeof(buf), "Payment = Cash");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 90,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-		} else {
-			snprintf(buf, sizeof(buf), "Payment = Credit");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 90,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-		}
-
-		// State Drawing
-		//evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 120, 100, 20,
-		//		COLOR24_BLACK);
-		//Fw::Post(evt);
-
-		//snprintf(buf, sizeof(buf), "Idle");
-		//evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 120,
-		//COLOR24_WHITE, COLOR24_BLACK, 2);
-		//Fw::Post(evt);
-
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 150, 110, 65,
-		COLOR24_BLACK);
-		Fw::Post(evt);
-
-		snprintf(buf, sizeof(buf), "Tank");
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 150,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-
-		Fw::Post(evt);
-
-		snprintf(buf, sizeof(buf), "Capacity:");
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 170,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-
-		Fw::Post(evt);
-		snprintf(buf, sizeof(buf), "%d", me->m_currTank.GetTankCapacity());
-
-		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 200,
-		COLOR24_WHITE, COLOR24_BLACK, 2);
-		Fw::Post(evt);
-
-		//snprintf(buf, sizeof(buf), "Idle");
-		//evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 130,
-		//COLOR24_WHITE, COLOR24_BLACK, 2);
-		//Fw::Post(evt);
-
-		// ------------ Draw Rectangle   ---------------
-
-		// ------------- Grade 87 ---------------------
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 250, 50, 50,
-		COLOR24_RED);
-		Fw::Post(evt);
-
-		// ------------- Grade 89 ---------------------
-
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 60, 250, 50, 50,
-		COLOR24_RED);
-		Fw::Post(evt);
-
-		// ------------- Grade 91 ---------------------
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 250, 50, 50,
-		COLOR24_RED);
-		Fw::Post(evt);
-
-		//  ------------- Grade 93 ---------------------
-		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 180, 250, 50, 50,
-		COLOR24_RED);
-		Fw::Post(evt);
-
-		// ----------- End of Draw Rectangle -------------
-
-		evt = new DispDrawEndReq(ILI9341, GET_HSMN(), GEN_SEQ());
-		Fw::Post(evt);
+		me->InitDraw(me);
 
 		return Q_HANDLED();
 	}
@@ -409,6 +292,11 @@ QState FuelPump::IdleDrawing(FuelPump *const me, QEvt const *const e) {
 		if (me->m_exit) {
 			if (me->m_paid) {
 				me->m_paid = false;
+
+				// ----------- MDRAW EVENT -----------
+				Evt *evt = new Evt(GDRAW, GET_HSMN());
+				me->PostSync(evt);
+
 				return Q_TRAN(&FuelPump::Passive);
 			}
 			return Q_TRAN(&FuelPump::Idle);
@@ -418,6 +306,16 @@ QState FuelPump::IdleDrawing(FuelPump *const me, QEvt const *const e) {
 			Fw::Post(evt);
 
 			char buf[30];
+
+			// State Drawing
+			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 120, 100, 20,
+			COLOR24_BLACK);
+			Fw::Post(evt);
+
+			snprintf(buf, sizeof(buf), "Take Receipt/Welcome");
+			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 120,
+			COLOR24_RED, COLOR24_BLACK, 2);
+			Fw::Post(evt);
 
 			snprintf(buf, sizeof(buf), "87");
 			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 7, 265,
@@ -488,6 +386,7 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 
 	case Q_ENTRY_SIG: {
 		EVENT(e);
+
 		me->m_timeoutTimer.Start(ACTIVE_TIME_OUT);
 		return Q_HANDLED();
 	}
@@ -510,8 +409,7 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 			me->m_grade = grade->GetGrade();
 			me->m_graded = true;
 
-			LOG("\nMoving %d\n", grade->GetGrade());
-			//me->m_grade_capacity = grade->GetGradeCapacity();
+			//LOG("\nMoving %d\n", grade->GetGrade());
 
 			Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
 					req.GetSeq(), ERROR_SUCCESS);
@@ -533,7 +431,7 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 
 	}
 	case GDRAW: {
-		return Q_TRAN(&FuelPump::Drawing);
+		return Q_TRAN(&FuelPump::WaitingDraw);
 	}
 
 	}
@@ -541,160 +439,12 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 	return Q_SUPER(&FuelPump::Passive);
 }
 
-QState FuelPump::Drawing(FuelPump *const me, QEvt const *const e) {
+QState FuelPump::WaitingDraw(FuelPump *const me, QEvt const *const e) {
 	switch (e->sig) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
-		Evt *evt = new DispDrawBeginReq(ILI9341, GET_HSMN(), GEN_SEQ());
-		Fw::Post(evt);
 
-		char buf[30];
-
-		if (me->m_grade == 87) {
-			// ------------- Grade 87 ---------------------
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 250, 50, 50,
-			COLOR24_GREEN);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "87");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 7, 265,
-			COLOR24_WHITE, COLOR24_GREEN, 3);
-			Fw::Post(evt);
-
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
-			COLOR24_BLACK);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Fuel");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 150,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Capacity:");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-			snprintf(buf, sizeof(buf), "%d",
-					me->m_currGrade->GetGradeCapacity());
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
-		} else if (me->m_grade == 89) {
-			// ------------- Grade 89 ---------------------
-
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 60, 250, 50, 50,
-			COLOR24_GREEN);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "89");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 67, 265,
-			COLOR24_WHITE, COLOR24_GREEN, 3);
-			Fw::Post(evt);
-
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
-			COLOR24_BLACK);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Fuel");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 150,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Capacity:");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-			snprintf(buf, sizeof(buf), "%d",
-					me->m_currGrade->GetGradeCapacity());
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
-		} else if (me->m_grade == 91) {
-			// ------------- Grade 91 ---------------------
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 250, 50, 50,
-			COLOR24_GREEN);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "91");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 127, 265,
-			COLOR24_WHITE, COLOR24_GREEN, 3);
-
-			Fw::Post(evt);
-
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
-			COLOR24_BLACK);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Fuel");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 150,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Capacity:");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-			snprintf(buf, sizeof(buf), "%d",
-					me->m_currGrade->GetGradeCapacity());
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
-
-		} else if (me->m_grade == 93) {
-			//  ------------- Grade 93 ---------------------
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 180, 250, 50, 50,
-			COLOR24_GREEN);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "93");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 187, 265,
-			COLOR24_WHITE, COLOR24_GREEN, 3);
-
-			Fw::Post(evt);
-
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
-			COLOR24_BLACK);
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Fuel");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 150,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-
-			snprintf(buf, sizeof(buf), "Capacity:");
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-
-			Fw::Post(evt);
-			snprintf(buf, sizeof(buf), "%d",
-					me->m_currGrade->GetGradeCapacity());
-
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
-		}
-
-		evt = new DispDrawEndReq(ILI9341, GET_HSMN(), GEN_SEQ());
-
-		Fw::Post(evt);
+		me->WaitDraw(me);
 
 		return Q_HANDLED();
 	}
@@ -710,10 +460,12 @@ QState FuelPump::Drawing(FuelPump *const me, QEvt const *const e) {
 		return Q_TRAN(&FuelPump::Waiting);
 
 	}
+
 	case Q_EXIT_SIG: {
 		EVENT(e);
 		return Q_HANDLED();
 	}
+
 	}
 	return Q_SUPER(&FuelPump::Passive);
 }
@@ -770,11 +522,17 @@ QState FuelPump::Filling(FuelPump *const me, QEvt const *const e) {
 		EVENT(e);
 
 		if (me->m_isbtn == false) {
-			if (me->m_price <= me->m_max_amount
+			if (me->m_price < me->m_max_amount
 					&& me->m_gallons <= me->m_currGrade->GetGradeCapacity()) {
 
 				me->m_gallons += me->m_currTank.GetGallonsRate();
 				me->m_price += me->m_currGrade->GetPriceRate();
+
+				// ------------ Adjust Price to be InBound ---------
+
+				if (me->m_price > me->m_max_amount) {
+					me->m_price -= me->m_max_amount;
+				}
 
 				// ----------- MDRAW EVENT -----------
 				Evt *evt = new Evt(FUDRAW, GET_HSMN());
@@ -819,15 +577,6 @@ QState FuelPump::ReDrawing(FuelPump *const me, QEvt const *const e) {
 		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 130, 50,
 		COLOR24_WHITE, COLOR24_BLACK, 2);
 		Fw::Post(evt);
-
-		/*snprintf(buf, sizeof(buf), "Price = %.2f", me->m_price);
-		 evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 10, 30,
-		 COLOR24_BLUE, COLOR24_GREEN, 2);
-		 Fw::Post(evt);
-		 snprintf(buf, sizeof(buf), "Gallons = %.2f", me->m_gallons);
-		 evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 10, 90,
-		 COLOR24_BLUE, COLOR24_GREEN, 2);
-		 Fw::Post(evt);*/
 
 		evt = new DispDrawEndReq(ILI9341, GET_HSMN(), GEN_SEQ());
 		Fw::Post(evt);
@@ -882,6 +631,242 @@ QState FuelPump::Admission(FuelPump *const me, QEvt const *const e) {
 
 	}
 	return Q_SUPER(&FuelPump::Passive);
+
+}
+
+void FuelPump::InitDraw(FuelPump *const me) {
+
+	Evt *evt = new DispDrawBeginReq(ILI9341, GET_HSMN(), GEN_SEQ());
+	Fw::Post(evt);
+
+	// -------------- Main Rectangle ----------
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 0, 240, 320,
+	COLOR24_BLACK);
+	Fw::Post(evt);
+
+	char buf[30];
+
+	// Price
+
+	snprintf(buf, sizeof(buf), "Price = ");
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 10,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+	Fw::Post(evt);
+
+	snprintf(buf, sizeof(buf), "%.2f", me->m_price);
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 130, 10,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+	Fw::Post(evt);
+
+	// -------------- Gallons -----------------
+
+	snprintf(buf, sizeof(buf), "Gallons = ");
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 50,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+
+	Fw::Post(evt);
+
+	snprintf(buf, sizeof(buf), "%.2f", me->m_gallons);
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 130, 50,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+
+	Fw::Post(evt);
+
+	// Payment Type
+	if (me->m_payment == 0) {
+
+		snprintf(buf, sizeof(buf), "Payment = Cash");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 90,
+		COLOR24_WHITE, COLOR24_BLACK, 2);
+
+		Fw::Post(evt);
+	} else if (me->m_payment == 1) {
+		snprintf(buf, sizeof(buf), "Payment = Credit");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 90,
+		COLOR24_WHITE, COLOR24_BLACK, 2);
+
+		Fw::Post(evt);
+	} else {
+
+		snprintf(buf, sizeof(buf), "Insert Payment");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 90,
+		COLOR24_WHITE, COLOR24_BLACK, 2);
+		Fw::Post(evt);
+	}
+
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 150, 110, 65,
+	COLOR24_BLACK);
+	Fw::Post(evt);
+
+	snprintf(buf, sizeof(buf), "Capacity");
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 60, 150,
+	COLOR24_BLACK, COLOR24_GRAY, 2);
+
+	Fw::Post(evt);
+
+	snprintf(buf, sizeof(buf), "Tank:");
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 170,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+
+	Fw::Post(evt);
+	snprintf(buf, sizeof(buf), "%d", me->m_currTank.GetTankCapacity());
+
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 200,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+	Fw::Post(evt);
+
+	//snprintf(buf, sizeof(buf), "Idle");
+	//evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 130,
+	//COLOR24_WHITE, COLOR24_BLACK, 2);
+	//Fw::Post(evt);
+
+	// ------------ Draw Rectangle   ---------------
+
+	// ------------- Grade 87 ---------------------
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 250, 50, 50,
+	COLOR24_RED);
+	Fw::Post(evt);
+
+	// ------------- Grade 89 ---------------------
+
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 60, 250, 50, 50,
+	COLOR24_RED);
+	Fw::Post(evt);
+
+	// ------------- Grade 91 ---------------------
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 250, 50, 50,
+	COLOR24_RED);
+	Fw::Post(evt);
+
+	//  ------------- Grade 93 ---------------------
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 180, 250, 50, 50,
+	COLOR24_RED);
+	Fw::Post(evt);
+
+	// ----------- End of Draw Rectangle -------------
+
+	evt = new DispDrawEndReq(ILI9341, GET_HSMN(), GEN_SEQ());
+	Fw::Post(evt);
+
+}
+
+void FuelPump::WaitDraw(FuelPump *const me) {
+
+	Evt *evt = new DispDrawBeginReq(ILI9341, GET_HSMN(), GEN_SEQ());
+	Fw::Post(evt);
+
+	char buf[30];
+
+	if (me->m_grade == 87) {
+		// ------------- Grade 87 ---------------------
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 250, 50, 50,
+		COLOR24_GREEN);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "87");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 7, 265,
+		COLOR24_WHITE, COLOR24_GREEN, 3);
+		Fw::Post(evt);
+
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+	} else if (me->m_grade == 89) {
+		// ------------- Grade 89 ---------------------
+
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 60, 250, 50, 50,
+		COLOR24_GREEN);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "89");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 67, 265,
+		COLOR24_WHITE, COLOR24_GREEN, 3);
+		Fw::Post(evt);
+
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+	} else if (me->m_grade == 91) {
+		// ------------- Grade 91 ---------------------
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 250, 50, 50,
+		COLOR24_GREEN);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "91");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 127, 265,
+		COLOR24_WHITE, COLOR24_GREEN, 3);
+
+		Fw::Post(evt);
+
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+	} else if (me->m_grade == 93) {
+		//  ------------- Grade 93 ---------------------
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 180, 250, 50, 50,
+		COLOR24_GREEN);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "93");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 187, 265,
+		COLOR24_WHITE, COLOR24_GREEN, 3);
+
+		Fw::Post(evt);
+
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 150, 120, 65,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+	}
+
+	if (me->m_graded) {
+
+		// --------------- State Drawing ------------------
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 120, 100, 20,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "Lift Nozzle Pumping");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 120,
+		COLOR24_RED, COLOR24_BLACK, 2);
+		Fw::Post(evt);
+
+		// --------------- Grade Capacity Drawing ------------------
+		snprintf(buf, sizeof(buf), "Grade:");
+
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
+		COLOR24_WHITE, COLOR24_BLACK, 2);
+
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "%d", me->m_currGrade->GetGradeCapacity());
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
+		COLOR24_WHITE, COLOR24_BLACK, 2);
+		Fw::Post(evt);
+	} else {
+		// --------------- State Drawing ------------------
+		evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 120, 100, 20,
+		COLOR24_BLACK);
+		Fw::Post(evt);
+
+		snprintf(buf, sizeof(buf), "Select Grade");
+		evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 0, 120,
+		COLOR24_RED, COLOR24_BLACK, 2);
+		Fw::Post(evt);
+	}
+
+	evt = new DispDrawEndReq(ILI9341, GET_HSMN(), GEN_SEQ());
+
+	Fw::Post(evt);
 
 }
 
