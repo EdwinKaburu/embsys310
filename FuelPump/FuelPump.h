@@ -54,10 +54,14 @@ bool m_graded;
 
 bool m_isbtn;
 
+bool m_exit;
+
 uint8_t m_payment;
 uint8_t m_max_amount;
 
 uint32_t m_grade;
+
+//uint16_t m_grade_capacity;
 
 FuelTank  &m_currTank;
 FuelGrade  *m_currGrade;

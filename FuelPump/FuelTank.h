@@ -74,13 +74,16 @@ public:
 		gallons_rate = new_rate;
 	}
 
-	uint16_t GetTankCapacity() {
+	void UpdateTankCapacity() {
 		c_tank_capacity = 0; // reset Tank Capacity
 		FuelGrade *grade;
 		for (int i = 0; i < FUEL_GRADE_CAPACITY; i++) {
 			grade = &tank_grades[i];
 			c_tank_capacity += grade->GetGradeCapacity();
 		}
+	}
+
+	uint16_t GetTankCapacity() {
 		return c_tank_capacity;
 	}
 
