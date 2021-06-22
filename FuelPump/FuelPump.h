@@ -37,7 +37,7 @@ protected:
 	           static QState IdleDrawing(FuelPump * const me, QEvt const * const e);
 	           static QState Passive(FuelPump * const me, QEvt const * const e);
 	              static QState Waiting(FuelPump * const me, QEvt const * const e);
-	              static QState WaitingDraw(FuelPump * const me, QEvt const * const e);
+	              static QState WaitingDrawing(FuelPump * const me, QEvt const * const e);
 	              static QState Pumping(FuelPump * const me, QEvt const * const e);
 	                 static QState Filling(FuelPump * const me, QEvt const * const e);
 	                 static QState ReDrawing(FuelPump * const me, QEvt const * const e);
@@ -49,11 +49,14 @@ Timer m_pumpTimer;
 float m_price;
 float m_gallons;
 
+float m_gallon_rate;
+float m_price_rate;
+
 bool m_paid;
 bool m_graded;
+bool m_ingore;
 
 bool m_isbtn;
-
 bool m_exit;
 
 uint8_t m_payment;
@@ -67,6 +70,17 @@ FuelTank  &m_currTank;
 FuelGrade  *m_currGrade;
 
 
+// Instructions for User
+typedef enum
+{
+	IDLE_ENTRY ,
+	GRADE_ENTRY ,
+	FUEL_ENTRY ,
+	ADMISSION_ENTRY,
+
+}DisMes;
+
+const char * m_toUser;
 
 void InitDraw(FuelPump *const me);
 void WaitDraw(FuelPump *const me);
@@ -87,7 +101,8 @@ enum{
     ADD_EVT(REDRAW)\
 	ADD_EVT(MDRAW) \
 	ADD_EVT(GDRAW) \
-	ADD_EVT(FUDRAW)
+	ADD_EVT(FLDRAW) \
+	ADD_EVT(COMPLETE)
 
 
 #undef ADD_EVT
