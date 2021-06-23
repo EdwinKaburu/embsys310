@@ -25,7 +25,10 @@ namespace APP {
     ADD_EVT(FUEL_PUMP_PAYMENT_IND) \
     ADD_EVT(FUEL_PUMP_GRADE_REQ) \
     ADD_EVT(FUEL_PUMP_GRADE_CFM) \
-	ADD_EVT(FUEL_PUMP_FILL_IND)
+	ADD_EVT(FUEL_PUMP_FILL_IND) \
+	ADD_EVT(FUEL_PUMP_CPRICERATE_REQ)\
+	ADD_EVT(FUEL_PUMP_CPRICERATE_CFM) \
+	ADD_EVT(FUEL_PUMP_CGALLONRATE_IND)
 
 #undef ADD_EVT
 #define ADD_EVT(e_) e_,
@@ -80,9 +83,6 @@ public:
 
 class FuelPumpPaymentInd: public Evt {
 public:
-	/*enum {
-	 TIMEOUT_MS = 100
-	 };*/
 	typedef enum {
 		CASH, CREDIT
 	} PaymentType;
@@ -104,13 +104,6 @@ private:
 	PaymentType m_paymentype;
 	uint8_t m_amount;
 };
-/*
- class FuelPumpPaymentCfm : public ErrorEvt{
- public:
- FuelPumpPaymentCfm(Hsmn to, Hsmn from, Sequence seq, Error error, Hsmn origin = HSM_UNDEF, Reason reason = 0):
- ErrorEvt(FUEL_PUMP_PAYMENT_CFM, to, from, seq, error, origin, reason) {}
- };
- */
 
 class FuelPumpGradeReq: public Evt {
 public:
@@ -119,12 +112,12 @@ public:
 	};
 
 	FuelPumpGradeReq(Hsmn to, Hsmn from, Sequence seq, uint32_t type = 87) :
-			Evt(FUEL_PUMP_GRADE_REQ, to, from, seq), m_greadeIndex(type) {
+			Evt(FUEL_PUMP_GRADE_REQ, to, from, seq), m_gradeIndex(type) {
 	}
-	uint32_t GetGradeType() const { return m_greadeIndex; }
+	uint32_t GetGradeType() const { return m_gradeIndex; }
 
 private:
-	uint32_t m_greadeIndex;
+	uint32_t m_gradeIndex;
 
 };
 
@@ -142,6 +135,48 @@ public:
 			Evt(FUEL_PUMP_FILL_IND, to, from, seq) {
 	}
 };
+
+class FuelPumpCPriceRateReq: public Evt{
+public:
+	enum{
+		TIMEOUT_MS = 100,
+	};
+	FuelPumpCPriceRateReq(Hsmn to, Hsmn from, Sequence seq, uint32_t type = 87, float p_rate = 0.25):
+		Evt(FUEL_PUMP_CPRICERATE_REQ, to , from, seq), m_gradeIndex(type), m_price_rate(p_rate){
+	}
+
+	uint32_t GetGradeType() const { return m_gradeIndex; }
+
+	float GetPriceRate() const { return m_price_rate; }
+
+private:
+	float m_price_rate;
+	uint32_t m_gradeIndex;
+
+};
+
+class FuelPumpCPriceRateCfm : public ErrorEvt {
+public:
+	FuelPumpCPriceRateCfm(Hsmn to, Hsmn from, Sequence seq, Error error, Hsmn origin = HSM_UNDEF, Reason reason = 0) :
+        ErrorEvt(FUEL_PUMP_CPRICERATE_CFM, to, from, seq, error, origin, reason) {}
+};
+
+class FuelPumpCGallonRateInd: public Evt{
+public:
+
+	FuelPumpCGallonRateInd(Hsmn to, Hsmn from, float  g_rate =  0.10) :
+				Evt(FUEL_PUMP_CGALLONRATE_IND, to, from), m_gallon_rate(g_rate){
+		}
+
+	float GetGallonRate() const {
+		return m_gallon_rate;
+	}
+private:
+	float m_gallon_rate;
+};
+
+
+
 
 } // namespace APP
 

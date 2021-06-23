@@ -62,15 +62,11 @@ bool m_exit;
 uint8_t m_payment;
 uint8_t m_max_amount;
 
-uint32_t m_grade;
-
-//uint16_t m_grade_capacity;
-
 FuelTank  &m_currTank;
 FuelGrade  *m_currGrade;
 
 
-// Instructions for User
+// ------------  Instructions for User ----------------
 typedef enum
 {
 	IDLE_ENTRY ,
@@ -82,8 +78,13 @@ typedef enum
 
 const char * m_toUser;
 
+// ------------  End of Instructions for User ----------------
+
 void InitDraw(FuelPump *const me);
 void WaitDraw(FuelPump *const me);
+//void GradeDraw(FuelPump *const me, uint32_t grade, char* buf);
+void GradeDraw(FuelPump *const me, uint32_t grade, char *buf, int16_t rect_x , int16_t text_x );
+
 
 enum{
 	ACTIVE_TIME_OUT = 20000,

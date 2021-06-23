@@ -4,6 +4,7 @@
  *  Created on: Jun 17, 2021
  *      Author: EdwinKaburu
  */
+
 // FUEL_PUMP_INTERFACE_H
 #ifndef FUEL_TANK_INTERFACE_H
 #define FUEL_TANK_INTERFACE_H
@@ -11,8 +12,6 @@
 #include <stdint.h>
 #include "fw_log.h"
 #include "qassert.h"
-
-//#define GPIO_PATTERN_ASSERT(t_) ((t_)? (void)0: Q_onAssert("GpioPattern.h", (int32_t)__LINE__))
 
 namespace APP {
 
@@ -23,7 +22,7 @@ typedef enum {
 
 class FuelGrade {
 public:
-	uint16_t c_grade_capacity;
+	float c_grade_capacity;
 	Grade fuel_grade;
 	float price_rate;
 
@@ -39,12 +38,12 @@ public:
 		return fuel_grade;
 	}
 
-	uint16_t GetGradeCapacity() {
+	float GetGradeCapacity() {
 		// Capacity Changes
 		return c_grade_capacity;
 	}
 
-	void SetGradeCapacity(uint16_t new_capacity) {
+	void SetGradeCapacity(float new_capacity) {
 		// Change Capacity
 		c_grade_capacity = new_capacity;
 	}
@@ -62,7 +61,7 @@ public:
 	FuelGrade tank_grades[FUEL_GRADE_CAPACITY];
 
 	// Do not Call / Access : Use GetTankCapacity() instead.
-	uint16_t c_tank_capacity;
+	float c_tank_capacity;
 
 	float gallons_rate;
 
@@ -83,7 +82,7 @@ public:
 		}
 	}
 
-	uint16_t GetTankCapacity() {
+	float GetTankCapacity() {
 		return c_tank_capacity;
 	}
 
