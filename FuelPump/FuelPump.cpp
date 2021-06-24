@@ -115,9 +115,7 @@ QState FuelPump::Starting(FuelPump *const me, QEvt const *const e) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
 
-		// ----------- Start Display --------------
-		//uint32_t timeout = FuelPumpStartReq::TIMEOUT_MS;
-		//FW_ASSERT(timeout > DispStartReq::TIMEOUT_MS);
+		// Start Display
 
 		me->GetHsm().ResetOutSeq();
 		Evt *evt = new DispStartReq(ILI9341, GET_HSMN(), GEN_SEQ());
@@ -213,8 +211,8 @@ QState FuelPump::Started(FuelPump *const me, QEvt const *const e) {
 
 	case Q_ENTRY_SIG: {
 		EVENT(e);
-		// ----------- MDRAW EVENT -----------
-		Evt *evt = new Evt(MDRAW, GET_HSMN());
+		// IDRAW EVENT
+		Evt *evt = new Evt(IDRAW, GET_HSMN());
 		me->PostSync(evt);
 
 		return Q_HANDLED();
@@ -237,12 +235,8 @@ QState FuelPump::Idle(FuelPump *const me, QEvt const *const e) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
 
-		// --- Immediate Reset ----
-		me->m_price = 0; // reset price
-		me->m_gallons = 0; // reset gallons
-		me->m_price_rate = 0; // reset price rate
-		me->m_gallon_rate = 0; // reset gallon rate
-		me->m_currGrade = NULL;
+		// Reset
+		me->ValuesReset(me);
 
 		// User Notification
 		me->m_toUser = DISMES_STRING[IDLE_ENTRY];
@@ -255,16 +249,17 @@ QState FuelPump::Idle(FuelPump *const me, QEvt const *const e) {
 		if (me->m_paid == false) {
 			FuelPumpPaymentInd const &req =
 					static_cast<FuelPumpPaymentInd const&>(*e);
-
-			me->m_payment = req.GetPayment(); // get user payment type
-			me->m_max_amount = req.GetAmount(); // get user entered amount
+			// Get user payment type
+			me->m_payment = req.GetPayment();
+			// Get user entered amount
+			me->m_max_amount = req.GetAmount();
 
 			me->m_paid = true;
 
-			//  User Notification
+			// 	User Notification
 			me->m_toUser = DISMES_STRING[GRADE_ENTRY];
-
-			Evt *evt = new Evt(MDRAW, GET_HSMN());
+			//	Idle Draw Notification
+			Evt *evt = new Evt(IDRAW, GET_HSMN());
 			me->PostSync(evt);
 		}
 
@@ -274,28 +269,34 @@ QState FuelPump::Idle(FuelPump *const me, QEvt const *const e) {
 	case FUEL_PUMP_CPRICERATE_REQ: {
 		EVENT(e);
 
-		FuelPumpCPriceRateReq const &req =
-				static_cast<FuelPumpCPriceRateReq const&>(*e);
+		// Assert m_paid = false
+		if (me->m_paid == false) {
+			FuelPumpCPriceRateReq const &req =
+					static_cast<FuelPumpCPriceRateReq const&>(*e);
 
-		FuelGrade *grade = me->m_currTank.GetFuelGradeG(
-				(Grade) req.GetGradeType());
+			FuelGrade *grade = me->m_currTank.GetFuelGradeG(
+					(Grade) req.GetGradeType());
 
-		Evt *evt = NULL;
+			Evt *evt = NULL;
 
-		if (grade) {
-			// Modify Price Rate
-			grade->SetPriceRate(req.GetPriceRate());
+			if (grade) {
+				//  Set Price-Rate of this Grade
+				grade->SetPriceRate(req.GetPriceRate());
 
-			evt = new FuelPumpCPriceRateCfm(req.GetFrom(), GET_HSMN(),
-					req.GetSeq(), ERROR_SUCCESS);
+				// Confirm Success
+				evt = new FuelPumpCPriceRateCfm(req.GetFrom(), GET_HSMN(),
+						req.GetSeq(), ERROR_SUCCESS);
+				Fw::Post(evt);
 
-			Fw::Post(evt);
+			} else {
 
-		} else {
-			evt = new FuelPumpCPriceRateCfm(req.GetFrom(), GET_HSMN(),
-					req.GetSeq(), ERROR_PARAM, GET_HSMN(),
-					FUEL_PUMP_REASON_INVALID_GRADE);
-			Fw::Post(evt);
+				// Confirm Error
+				evt = new FuelPumpCPriceRateCfm(req.GetFrom(), GET_HSMN(),
+						req.GetSeq(), ERROR_PARAM, GET_HSMN(),
+						FUEL_PUMP_REASON_INVALID_GRADE);
+				Fw::Post(evt);
+			}
+
 		}
 
 		return Q_HANDLED();
@@ -304,15 +305,21 @@ QState FuelPump::Idle(FuelPump *const me, QEvt const *const e) {
 	case FUEL_PUMP_CGALLONRATE_IND: {
 		EVENT(e);
 
-		FuelPumpCGallonRateInd const &req =
-				static_cast<FuelPumpCGallonRateInd const&>(*e);
+		// Assert m_paid = false
+		if (me->m_paid == false) {
 
-		// Change MainTank Gallon Rate
-		me->m_currTank.SetGallonsRate(req.GetGallonRate());
+			FuelPumpCGallonRateInd const &req =
+					static_cast<FuelPumpCGallonRateInd const&>(*e);
+
+			// Set/Change MainTank Gallon-Rate
+			me->m_currTank.SetGallonsRate(req.GetGallonRate());
+
+		}
 
 		return Q_HANDLED();
 	}
-	case MDRAW: {
+	case IDRAW: {
+		// Transition to IdleDrawing
 		return Q_TRAN(&FuelPump::IdleDrawing);
 	}
 	case Q_EXIT_SIG: {
@@ -342,14 +349,16 @@ QState FuelPump::IdleDrawing(FuelPump *const me, QEvt const *const e) {
 	case DISP_DRAW_END_CFM: {
 		EVENT(e);
 
-		// ------------  Stay in Current State ? --------
+		// Assert m_exit = true
 		if (me->m_exit) {
+			// Assert m_paid = true
 			if (me->m_paid) {
 
-				//  MDRAW EVENT
-				Evt *evt = new Evt(GDRAW, GET_HSMN());
+				//  WDRAW EVENT
+				Evt *evt = new Evt(WDRAW, GET_HSMN());
 				me->PostSync(evt);
 
+				// Transition to Passive State
 				return Q_TRAN(&FuelPump::Passive);
 			}
 			return Q_TRAN(&FuelPump::Idle);
@@ -420,12 +429,14 @@ QState FuelPump::Passive(FuelPump *const me, QEvt const *const e) {
 	case TIME_OUT_TIMER: {
 		EVENT(e);
 
-		me->m_paid = false;
+		// Set m_paid to false
+		//me->m_paid = false;
 
-		// MDRAW EVENT
-		Evt *evt = new Evt(MDRAW, GET_HSMN());
+		// IDRAW EVENT
+		Evt *evt = new Evt(IDRAW, GET_HSMN());
 		me->PostSync(evt);
 
+		// Transition to Idle State
 		return Q_TRAN(&FuelPump::Idle);
 	}
 
@@ -438,51 +449,67 @@ QState FuelPump::Waiting(FuelPump *const me, QEvt const *const e) {
 
 	case Q_ENTRY_SIG: {
 		EVENT(e);
+		// Timeout Start
 		me->m_timeoutTimer.Start(ACTIVE_TIME_OUT);
 		return Q_HANDLED();
 	}
 	case Q_EXIT_SIG: {
 		EVENT(e);
+		// Timeout Stop
 		me->m_timeoutTimer.Stop();
 		return Q_HANDLED();
 	}
 	case FUEL_PUMP_GRADE_REQ: {
 		EVENT(e);
-		FuelPumpGradeReq const &req = static_cast<FuelPumpGradeReq const&>(*e);
 
-		FuelGrade *grade = me->m_currTank.GetFuelGradeG(
-				(Grade) req.GetGradeType());
+		// Assert both m_paid = true && m_graded = false
+		if (me->m_paid && me->m_graded == false && me->m_ingore == false) {
+			FuelPumpGradeReq const &req =
+					static_cast<FuelPumpGradeReq const&>(*e);
 
-		if (grade && me->m_graded == false) {
+			FuelGrade *grade = me->m_currTank.GetFuelGradeG(
+					(Grade) req.GetGradeType());
 
-			me->m_currGrade = grade;
-			me->m_graded = true;
-			me->m_price_rate = grade->GetPriceRate();
-			me->m_gallon_rate = me->m_currTank.GetGallonsRate();
+			if (grade) {
 
-			Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
-					req.GetSeq(), ERROR_SUCCESS);
-			Fw::Post(evt);
+				// Set currGrade to grade
+				me->m_currGrade = grade;
+				me->m_graded = true;
 
-			// GDRAW EVENT
-			evt = new Evt(GDRAW, GET_HSMN());
-			me->PostSync(evt);
+				me->m_ingore = true;
 
-			//  User Notification
-			me->m_toUser = DISMES_STRING[FUEL_ENTRY];
+				// Get Grade Price-Rate
+				me->m_price_rate = grade->GetPriceRate();
+				// Get Gallon Price-Rate
+				me->m_gallon_rate = me->m_currTank.GetGallonsRate();
 
-			return Q_HANDLED();
+				// Confirm Success
+				Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
+						req.GetSeq(), ERROR_SUCCESS);
+				Fw::Post(evt);
 
-		} else {
-			Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
-					req.GetSeq(), ERROR_PARAM, GET_HSMN(),
-					FUEL_PUMP_REASON_INVALID_GRADE);
-			Fw::Post(evt);
-			return Q_HANDLED();
+				// WDRAW EVENT
+				evt = new Evt(WDRAW, GET_HSMN());
+				me->PostSync(evt);
+
+				//  User Notification
+				me->m_toUser = DISMES_STRING[FUEL_ENTRY];
+
+			} else {
+				// Confirm Error : Invalid Grade
+				Evt *evt = new FuelPumpGradeCfm(req.GetFrom(), GET_HSMN(),
+						req.GetSeq(), ERROR_PARAM, GET_HSMN(),
+						FUEL_PUMP_REASON_INVALID_GRADE);
+				Fw::Post(evt);
+
+			}
+
 		}
 
+		return Q_HANDLED();
 	}
-	case GDRAW: {
+	case WDRAW: {
+		// Transition to WaitingDrawing
 		return Q_TRAN(&FuelPump::WaitingDrawing);
 	}
 
@@ -503,9 +530,9 @@ QState FuelPump::WaitingDrawing(FuelPump *const me, QEvt const *const e) {
 	case DISP_DRAW_END_CFM: {
 		EVENT(e);
 
+		// Assert m_graded = true
 		if (me->m_graded) {
 
-			//me->m_graded = false;
 			return Q_TRAN(&FuelPump::Pumping);
 		}
 		return Q_TRAN(&FuelPump::Waiting);
@@ -526,7 +553,7 @@ QState FuelPump::Pumping(FuelPump *const me, QEvt const *const e) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
 
-		//  Turn On Led
+		// Turn On LED,
 		Evt *evt = new GpioOutPatternReq(USER_LED, GET_HSMN(), GEN_SEQ(), 0,
 				true);
 		Fw::Post(evt);
@@ -552,6 +579,7 @@ QState FuelPump::Pumping(FuelPump *const me, QEvt const *const e) {
 		Evt *evt = new Evt(COMPLETE, GET_HSMN());
 		me->PostSync(evt);
 
+		// Transition to Admission
 		return Q_TRAN(&FuelPump::Admission);
 	}
 
@@ -563,13 +591,14 @@ QState FuelPump::Filling(FuelPump *const me, QEvt const *const e) {
 	switch (e->sig) {
 	case Q_ENTRY_SIG: {
 		EVENT(e);
-		// -- Start Timer --
+		// Start PumpTimer
 		me->m_pumpTimer.Start(PUMP_TIMER);
 
 		return Q_HANDLED();
 	}
 	case Q_EXIT_SIG: {
 		EVENT(e);
+		// End PumpTimer
 		me->m_pumpTimer.Stop();
 		return Q_HANDLED();
 	}
@@ -579,16 +608,15 @@ QState FuelPump::Filling(FuelPump *const me, QEvt const *const e) {
 		if (me->m_isbtn == false) {
 
 			// Calculate Price and Gallons
-
 			if (me->m_gallons < me->m_currGrade->GetGradeCapacity() - 1
-					&& me->m_price < me->m_max_amount ) {
+					&& me->m_price < me->m_max_amount) {
 
 				if (me->m_price
-						< (me->m_max_amount - me->m_price_rate) - 0.02) {
+						< (me->m_max_amount - me->m_price_rate) - 0.50f) {
 					me->m_gallons += me->m_gallon_rate;
 					me->m_price += me->m_price_rate;
 				} else {
-					me->m_gallons += me->m_gallon_rate;
+					me->m_gallons += 0.01f;
 					me->m_price += 0.01f;
 				}
 
@@ -596,7 +624,7 @@ QState FuelPump::Filling(FuelPump *const me, QEvt const *const e) {
 				Evt *evt = new Evt(FLDRAW, GET_HSMN());
 				me->PostSync(evt);
 
-				me->m_pumpTimer.Restart(PUMP_TIMER);
+				//me->m_pumpTimer.Restart(PUMP_TIMER);
 				me->m_isbtn = true;
 
 			}
@@ -684,12 +712,13 @@ QState FuelPump::Admission(FuelPump *const me, QEvt const *const e) {
 	}
 	case COMPLETE: {
 
+		// Set m_graded to false
 		me->m_graded = false;
 
-		// GDRAW EVENT
-		Evt *evt = new Evt(GDRAW, GET_HSMN());
-		me->PostSync(evt);
-		return Q_TRAN(&FuelPump::Waiting);
+		// WDRAW EVENT
+		//Evt *evt = new Evt(WDRAW, GET_HSMN());
+		//me->PostSync(evt);
+		return Q_TRAN(&FuelPump::WaitingDrawing);
 
 	}
 
@@ -824,21 +853,20 @@ void FuelPump::WaitDraw(FuelPump *const me) {
 
 	// Display Selected Grade Capacity
 
-			evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 170, 120, 65,
-			COLOR24_BLACK);
-			Fw::Post(evt);
+	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 120, 170, 120, 65,
+	COLOR24_BLACK);
+	Fw::Post(evt);
 
-			snprintf(buf, sizeof(buf), "Grade:");
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
+	snprintf(buf, sizeof(buf), "Grade:");
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 170,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+	Fw::Post(evt);
 
-			// Display Grade Capacity
-			snprintf(buf, sizeof(buf), "%.1f", me->m_currGrade->GetGradeCapacity());
-			evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
-			COLOR24_WHITE, COLOR24_BLACK, 2);
-			Fw::Post(evt);
-
+	// Display Grade Capacity
+	snprintf(buf, sizeof(buf), "%.1f", me->m_currGrade->GetGradeCapacity());
+	evt = new DispDrawTextReq(ILI9341, GET_HSMN(), buf, 120, 200,
+	COLOR24_WHITE, COLOR24_BLACK, 2);
+	Fw::Post(evt);
 
 	// User Notification Drawing
 	evt = new DispDrawRectReq(ILI9341, GET_HSMN(), 0, 120, 160, 20,
@@ -857,7 +885,8 @@ void FuelPump::WaitDraw(FuelPump *const me) {
 
 }
 
-void FuelPump::GradeDraw(FuelPump *const me, uint32_t grade, char *buf, int16_t rect_x, int16_t text_x) {
+void FuelPump::GradeDraw(FuelPump *const me, uint32_t grade, char *buf,
+		int16_t rect_x, int16_t text_x) {
 
 	Evt *evt = new DispDrawRectReq(ILI9341, GET_HSMN(), rect_x, 250, 50, 50,
 	COLOR24_GREEN);
@@ -870,5 +899,25 @@ void FuelPump::GradeDraw(FuelPump *const me, uint32_t grade, char *buf, int16_t 
 	Fw::Post(evt);
 
 }
+
+void FuelPump::ValuesReset(FuelPump *const me)
+{
+	// --- Immediate Reset ----
+
+	// reset price
+	me->m_price = 0;
+	// reset gallons
+	me->m_gallons = 0;
+	// reset price rate
+	me->m_price_rate = 0;
+	// reset gallon rate
+	me->m_gallon_rate = 0;
+
+	me->m_paid = false;
+
+	me->m_ingore = false;
+	me->m_currGrade = NULL;
+}
+
 
 }

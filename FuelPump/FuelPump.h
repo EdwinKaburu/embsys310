@@ -82,14 +82,15 @@ const char * m_toUser;
 
 void InitDraw(FuelPump *const me);
 void WaitDraw(FuelPump *const me);
-//void GradeDraw(FuelPump *const me, uint32_t grade, char* buf);
-void GradeDraw(FuelPump *const me, uint32_t grade, char *buf, int16_t rect_x , int16_t text_x );
+void GradeDraw(FuelPump *const me, uint32_t grade, char *buf, int16_t rect_x,
+		int16_t text_x );
+void ValuesReset(FuelPump *const me);
+
 
 
 enum{
 	ACTIVE_TIME_OUT = 20000,
 	PUMP_TIME_OUT = 10000,
-	NODEUP_TIME_OUT = 10000
 };
 
 #define FUEL_PUMP_TIMER_EVT \
@@ -100,8 +101,8 @@ enum{
 #define FUEL_PUMP_INTERNAL_EVT \
     ADD_EVT(DONE) \
     ADD_EVT(REDRAW)\
-	ADD_EVT(MDRAW) \
-	ADD_EVT(GDRAW) \
+	ADD_EVT(IDRAW) \
+	ADD_EVT(WDRAW) \
 	ADD_EVT(FLDRAW) \
 	ADD_EVT(COMPLETE)
 
