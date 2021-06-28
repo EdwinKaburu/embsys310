@@ -89,7 +89,7 @@ void ValuesReset(FuelPump *const me);
 
 
 enum{
-	ACTIVE_TIME_OUT = 20000,
+	ACTIVE_TIME_OUT = 10000,
 	PUMP_TIME_OUT = 10000,
 };
 
